@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "Roadside Assistance",
+    "slug": "roadside-assistance",
+    "version": "1.0.0",
+    "entryPoint": "./index.js",
+    "extra": {
+      "apiUrl": "http://192.168.1.22:4000/api"
+    },
+    "orientation": "portrait",
+    "platforms": ["android", "ios", "web"],
+    "assetBundlePatterns": ["**/*"]
+  }
+}

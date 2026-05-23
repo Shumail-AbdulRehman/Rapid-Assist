@@ -1,0 +1,9 @@
+.expo/
+.expo-export-test/
+node_modules/
+*.log
+*.err.log
+.env
+.env.*
+!.env.example
+server/uploads/
