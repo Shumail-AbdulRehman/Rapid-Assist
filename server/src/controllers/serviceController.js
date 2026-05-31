@@ -1,4 +1,4 @@
-import { pool } from "../config/db.js";
+import { Service } from "../models/index.js";
 
 function getErrorMessage(error) {
   return error?.message || error?.code || error?.cause?.message || error?.cause?.code || String(error);
@@ -6,14 +6,16 @@ function getErrorMessage(error) {
 
 export async function getServices(_req, res) {
   try {
-    const { rows } = await pool.query("SELECT id, name, base_price, extra_per_km FROM services ORDER BY id");
+    const services = await Service.find().sort({ createdAt: 1 }).lean();
 
     return res.json(
-      rows.map((service) => ({
-        id: service.id,
+      services.map((service) => ({
+        id: service._id.toString(),
+        code: service.code,
         name: service.name,
-        basePrice: Number(service.base_price),
-        extraPerKm: Number(service.extra_per_km),
+        description: service.description,
+        pricing: service.pricing,
+        config: service.config,
       }))
     );
   } catch (error) {
