@@ -1,23 +1,21 @@
 {
   "name": "roadside-assistance-platform",
   "private": true,
-  "main": "apps/mobile/index.js",
   "workspaces": [
     "apps/web",
     "apps/mobile",
     "server"
   ],
   "scripts": {
+    "db:pull": "docker pull mongo:7",
+    "db:up": "docker compose up -d mongodb",
+    "db:down": "docker compose stop mongodb",
+    "db:logs": "docker compose logs -f mongodb",
+    "db:shell": "docker compose exec mongodb mongosh roadside_app",
+    "db:seed:demo": "node server/src/data/seedDemoAccounts.js",
     "dev:web": "npm --workspace apps/web run dev",
     "dev:mobile": "npm --workspace apps/mobile run start",
     "dev:server": "npm --workspace server run dev",
     "lint:web": "npm --workspace apps/web run lint"
-  },
-  "dependencies": {
-    "@esbuild/win32-x64": "^0.21.5",
-    "@rollup/rollup-win32-x64-msvc": "^4.52.5",
-    "array-flatten": "^1.1.1",
-    "esbuild": "^0.21.5",
-    "methods": "^1.1.2"
   }
 }
