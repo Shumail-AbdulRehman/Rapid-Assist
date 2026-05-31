@@ -1,5 +1,6 @@
 import { View } from "react-native";
 import { WebView } from "react-native-webview";
+import { GEOAPIFY_API_KEY } from "./config";
 
 function escapeText(text) {
   return String(text || "")
@@ -8,22 +9,47 @@ function escapeText(text) {
     .replace(/\r?\n/g, " ");
 }
 
-export function MapPreview({ requestLocation, providerLocation, nearbyRequests = [] }) {
-  const center = providerLocation || requestLocation || { latitude: 24.8607, longitude: 67.0011 };
+export function MapPreview({
+  requestLocation,
+  destinationLocation,
+  providerLocation,
+  nearbyRequests = [],
+}) {
+  const center =
+    providerLocation || requestLocation || destinationLocation || { latitude: 24.8607, longitude: 67.0011 };
+  const tileUrl = GEOAPIFY_API_KEY
+    ? `https://maps.geoapify.com/v1/tile/osm-carto/{z}/{x}/{y}.png?apiKey=${GEOAPIFY_API_KEY}`
+    : "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+  const attribution = GEOAPIFY_API_KEY
+    ? '&copy; OpenStreetMap contributors, Powered by Geoapify'
+    : '&copy; OpenStreetMap contributors';
   const requestScript = requestLocation
-    ? `L.circleMarker([${requestLocation.latitude}, ${requestLocation.longitude}], {radius: 10, color: '#ffb84d', fillColor: '#ffb84d', fillOpacity: 1}).addTo(map).bindPopup('Request location');`
+    ? `L.circleMarker([${requestLocation.latitude}, ${requestLocation.longitude}], {radius: 10, color: '#7c3aed', fillColor: '#7c3aed', fillOpacity: 1}).addTo(map).bindPopup('Pickup');`
     : "";
   const providerScript = providerLocation
-    ? `L.circleMarker([${providerLocation.latitude}, ${providerLocation.longitude}], {radius: 10, color: '#46d0a4', fillColor: '#46d0a4', fillOpacity: 1}).addTo(map).bindPopup('Provider location');`
+    ? `L.circleMarker([${providerLocation.latitude}, ${providerLocation.longitude}], {radius: 10, color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1}).addTo(map).bindPopup('Provider');`
+    : "";
+  const destinationScript = destinationLocation
+    ? `L.circleMarker([${destinationLocation.latitude}, ${destinationLocation.longitude}], {radius: 10, color: '#ef4444', fillColor: '#ef4444', fillOpacity: 1}).addTo(map).bindPopup('Destination');`
     : "";
   const lineScript =
-    requestLocation && providerLocation
-      ? `L.polyline([[${requestLocation.latitude}, ${requestLocation.longitude}], [${providerLocation.latitude}, ${providerLocation.longitude}]], {color: '#f7f7ef', weight: 4}).addTo(map);`
+    requestLocation && destinationLocation
+      ? `L.polyline([[${requestLocation.latitude}, ${requestLocation.longitude}], [${destinationLocation.latitude}, ${destinationLocation.longitude}]], {color: '#7c3aed', weight: 4, opacity: 0.75}).addTo(map);`
+      : requestLocation && providerLocation
+        ? `L.polyline([[${requestLocation.latitude}, ${requestLocation.longitude}], [${providerLocation.latitude}, ${providerLocation.longitude}]], {color: '#7c3aed', weight: 4, opacity: 0.75}).addTo(map);`
+        : "";
+  const providerTrailScript =
+    requestLocation && providerLocation && destinationLocation
+      ? `L.polyline([[${providerLocation.latitude}, ${providerLocation.longitude}], [${requestLocation.latitude}, ${requestLocation.longitude}]], {color: '#22c55e', weight: 3, opacity: 0.55, dashArray: '6 8'}).addTo(map);`
       : "";
+  const fitBoundsScript = [requestLocation, destinationLocation, providerLocation]
+    .filter(Boolean)
+    .map((point) => `[${point.latitude}, ${point.longitude}]`)
+    .join(",");
   const nearbyScript = nearbyRequests
     .map(
       (request) =>
-        `L.circleMarker([${request.latitude}, ${request.longitude}], {radius: 8, color: '#8bd3ff', fillColor: '#8bd3ff', fillOpacity: 1}).addTo(map).bindPopup('${escapeText(request.serviceName)} - ${request.distanceKm} km');`
+        `L.circleMarker([${request.latitude}, ${request.longitude}], {radius: 8, color: '#c4b5fd', fillColor: '#c4b5fd', fillOpacity: 1}).addTo(map).bindPopup('${escapeText(request.markerLabel || request.serviceName || "Nearby provider")} - ${request.distanceKm} km');`
     )
     .join("\n");
 
@@ -37,7 +63,12 @@ export function MapPreview({ requestLocation, providerLocation, nearbyRequests =
           href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         />
         <style>
-          html, body, #map { margin: 0; padding: 0; height: 100%; width: 100%; background: #0f2027; }
+          html, body, #map { margin: 0; padding: 0; height: 100%; width: 100%; background: #f7f4ff; }
+          .leaflet-control-attribution {
+            background: rgba(255, 255, 255, 0.82) !important;
+            color: #6b5d8d !important;
+            font-family: sans-serif !important;
+          }
         </style>
       </head>
       <body>
@@ -45,20 +76,23 @@ export function MapPreview({ requestLocation, providerLocation, nearbyRequests =
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <script>
           var map = L.map('map').setView([${center.latitude}, ${center.longitude}], 13);
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
+          L.tileLayer('${tileUrl}', {
+            attribution: '${attribution}'
           }).addTo(map);
           ${requestScript}
           ${providerScript}
+          ${destinationScript}
           ${lineScript}
+          ${providerTrailScript}
           ${nearbyScript}
+          ${fitBoundsScript ? `map.fitBounds([${fitBoundsScript}], {padding: [28, 28]});` : ""}
         </script>
       </body>
     </html>
   `;
 
   return (
-    <View style={{ height: 260, borderRadius: 18, overflow: "hidden", marginBottom: 12 }}>
+    <View style={{ height: 228, borderRadius: 24, overflow: "hidden", marginBottom: 12 }}>
       <WebView originWhitelist={["*"]} source={{ html }} />
     </View>
   );
