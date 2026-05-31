@@ -1,44 +1,97 @@
-import { pool } from "../config/db.js";
+import mongoose from "mongoose";
+import { Offer, ProviderProfile, Service, ServiceRequest } from "../models/index.js";
 import { findNearbyProviders } from "../services/providerService.js";
 import { getDistanceKm, getExtraDistanceCharge } from "../utils/distance.js";
 
-function mapOffer(row) {
+function isValidObjectId(value) {
+  return mongoose.isValidObjectId(value);
+}
+
+function parseFiniteNumber(value) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function mapOffer(offer) {
+  const provider = offer.provider || {};
+
   return {
-    id: row.id,
-    requestId: row.request_id,
-    providerId: row.provider_id,
-    providerName: row.provider_name,
-    price: Number(row.price),
-    estimatedMinutes: row.estimated_minutes,
-    message: row.message,
-    distanceKm: Number(row.distance_km),
-    extraDistanceCharge: Number(row.extra_distance_charge),
-    status: row.status,
+    id: offer._id.toString(),
+    requestId: offer.request?._id?.toString() || offer.request?.toString(),
+    providerId: provider._id?.toString() || offer.provider?.toString(),
+    providerName: provider.name,
+    price: Number(offer.price),
+    estimatedMinutes: offer.estimatedMinutes,
+    message: offer.message,
+    distanceKm: Number(offer.distanceKm),
+    extraDistanceCharge: Number(offer.extraDistanceCharge),
+    status: offer.status,
   };
+}
+
+function mapRequest(request) {
+  const service = request.service || {};
+  const user = request.user || {};
+
+  return {
+    id: request._id.toString(),
+    description: request.description,
+    vehicleNumber: request.vehicleNumber,
+    status: request.status,
+    serviceName: service.name,
+    latitude: Number(request.currentLatitude),
+    longitude: Number(request.currentLongitude),
+    userName: user.name,
+    basePrice: Number(service.basePrice),
+    extraPerKm: Number(service.extraPerKm),
+    acceptedOfferId: request.acceptedOffer?.toString() || null,
+  };
+}
+
+async function canProviderViewRequest(providerId, requestId) {
+  return Boolean(await Offer.exists({ provider: providerId, request: requestId }));
 }
 
 export async function createRequest(req, res) {
   const { serviceId, description, vehicleNumber, latitude, longitude } = req.body;
+  const currentLatitude = parseFiniteNumber(latitude);
+  const currentLongitude = parseFiniteNumber(longitude);
 
-  if (!serviceId || !description || !vehicleNumber || latitude == null || longitude == null) {
+  if (!serviceId || !description || !vehicleNumber || currentLatitude == null || currentLongitude == null) {
     return res.status(400).json({
       message: "serviceId, description, vehicleNumber, latitude and longitude are required",
     });
   }
 
-  try {
-    const requestResult = await pool.query(
-      `INSERT INTO service_requests
-        (user_id, service_id, description, vehicle_number, current_latitude, current_longitude)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING *`,
-      [req.user.id, serviceId, description, vehicleNumber, latitude, longitude]
-    );
+  if (!isValidObjectId(serviceId)) {
+    return res.status(400).json({ message: "Invalid serviceId" });
+  }
 
-    const nearbyProviders = await findNearbyProviders(Number(latitude), Number(longitude), 4);
+  try {
+    const service = await Service.findById(serviceId);
+
+    if (!service) {
+      return res.status(404).json({ message: "Service not found" });
+    }
+
+    const request = await ServiceRequest.create({
+      user: req.user.id,
+      service: service._id,
+      description,
+      vehicleNumber,
+      currentLatitude,
+      currentLongitude,
+    });
+
+    await request.populate([
+      { path: "service", select: "name basePrice extraPerKm" },
+      { path: "user", select: "name" },
+    ]);
+
+    const nearbyProviders = await findNearbyProviders(currentLatitude, currentLongitude, 4);
 
     return res.status(201).json({
-      request: requestResult.rows[0],
+      request: mapRequest(request),
       nearbyProviders,
     });
   } catch (error) {
@@ -47,65 +100,58 @@ export async function createRequest(req, res) {
 }
 
 export async function getRequestDetails(req, res) {
-  try {
-    const { rows } = await pool.query(
-      `SELECT sr.*, s.name AS service_name, s.base_price, s.extra_per_km,
-              u.name AS user_name
-       FROM service_requests sr
-       JOIN services s ON s.id = sr.service_id
-       JOIN users u ON u.id = sr.user_id
-       WHERE sr.id = $1`,
-      [req.params.id]
-    );
+  const { id } = req.params;
 
-    if (rows.length === 0) {
+  if (!isValidObjectId(id)) {
+    return res.status(400).json({ message: "Invalid request id" });
+  }
+
+  try {
+    const request = await ServiceRequest.findById(id)
+      .populate("service", "name basePrice extraPerKm")
+      .populate("user", "name")
+      .lean();
+
+    if (!request) {
       return res.status(404).json({ message: "Request not found" });
     }
 
-    const request = rows[0];
-    const offersResult = await pool.query(
-      `SELECT o.*, provider.name AS provider_name
-       FROM offers o
-       JOIN users provider ON provider.id = o.provider_id
-       WHERE o.request_id = $1
-       ORDER BY o.created_at ASC`,
-      [req.params.id]
-    );
+    const isOwner = request.user?._id?.toString() === req.user.id;
+    const providerCanView = req.user.role === "provider" && (await canProviderViewRequest(req.user.id, request._id));
+
+    if (req.user.role === "user" && !isOwner) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    if (req.user.role === "provider" && !providerCanView) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const offers = await Offer.find({ request: request._id })
+      .sort({ createdAt: 1 })
+      .populate("provider", "name")
+      .lean();
 
     let acceptedProviderLocation = null;
 
-    if (request.accepted_offer_id) {
-      const locationResult = await pool.query(
-        `SELECT p.current_latitude, p.current_longitude
-         FROM offers o
-         JOIN provider_profiles p ON p.user_id = o.provider_id
-         WHERE o.id = $1`,
-        [request.accepted_offer_id]
-      );
+    if (request.acceptedOffer) {
+      const acceptedOffer = await Offer.findById(request.acceptedOffer).lean();
 
-      if (locationResult.rows[0]) {
-        acceptedProviderLocation = {
-          latitude: Number(locationResult.rows[0].current_latitude),
-          longitude: Number(locationResult.rows[0].current_longitude),
-        };
+      if (acceptedOffer) {
+        const profile = await ProviderProfile.findOne({ user: acceptedOffer.provider }).lean();
+
+        if (profile?.currentLatitude != null && profile?.currentLongitude != null) {
+          acceptedProviderLocation = {
+            latitude: Number(profile.currentLatitude),
+            longitude: Number(profile.currentLongitude),
+          };
+        }
       }
     }
 
     return res.json({
-      request: {
-        id: request.id,
-        description: request.description,
-        vehicleNumber: request.vehicle_number,
-        status: request.status,
-        serviceName: request.service_name,
-        latitude: Number(request.current_latitude),
-        longitude: Number(request.current_longitude),
-        userName: request.user_name,
-        basePrice: Number(request.base_price),
-        extraPerKm: Number(request.extra_per_km),
-        acceptedOfferId: request.accepted_offer_id,
-      },
-      offers: offersResult.rows.map(mapOffer),
+      request: mapRequest(request),
+      offers: offers.map(mapOffer),
       acceptedProviderLocation,
     });
   } catch (error) {
@@ -114,46 +160,47 @@ export async function getRequestDetails(req, res) {
 }
 
 export async function getNearbyRequests(req, res) {
-  const latitude = Number(req.query.latitude);
-  const longitude = Number(req.query.longitude);
-  const radiusKm = Number(req.query.radiusKm || 4);
+  const latitude = parseFiniteNumber(req.query.latitude);
+  const longitude = parseFiniteNumber(req.query.longitude);
+  const radiusKm = parseFiniteNumber(req.query.radiusKm || 4);
 
-  if (Number.isNaN(latitude) || Number.isNaN(longitude)) {
+  if (latitude == null || longitude == null) {
     return res.status(400).json({ message: "latitude and longitude query params are required" });
   }
 
-  try {
-    const { rows } = await pool.query(
-      `SELECT sr.*, s.name AS service_name, s.base_price, s.extra_per_km, u.name AS user_name
-       FROM service_requests sr
-       JOIN services s ON s.id = sr.service_id
-       JOIN users u ON u.id = sr.user_id
-       WHERE sr.status IN ('pending', 'offered')
-       ORDER BY sr.created_at DESC`
-    );
+  if (radiusKm == null || radiusKm <= 0 || radiusKm > 50) {
+    return res.status(400).json({ message: "radiusKm must be a number between 0 and 50" });
+  }
 
-    const nearby = rows
+  try {
+    const requests = await ServiceRequest.find({ status: { $in: ["pending", "offered"] } })
+      .sort({ createdAt: -1 })
+      .populate("service", "name basePrice extraPerKm")
+      .populate("user", "name")
+      .lean();
+
+    const nearby = requests
       .map((request) => {
         const distanceKm = getDistanceKm(
           latitude,
           longitude,
-          Number(request.current_latitude),
-          Number(request.current_longitude)
+          Number(request.currentLatitude),
+          Number(request.currentLongitude)
         );
 
-        const extraDistanceCharge = getExtraDistanceCharge(distanceKm, Number(request.extra_per_km));
+        const extraDistanceCharge = getExtraDistanceCharge(distanceKm, Number(request.service.extraPerKm));
 
         return {
-          id: request.id,
-          userName: request.user_name,
-          serviceName: request.service_name,
+          id: request._id.toString(),
+          userName: request.user.name,
+          serviceName: request.service.name,
           description: request.description,
-          vehicleNumber: request.vehicle_number,
-          latitude: Number(request.current_latitude),
-          longitude: Number(request.current_longitude),
+          vehicleNumber: request.vehicleNumber,
+          latitude: Number(request.currentLatitude),
+          longitude: Number(request.currentLongitude),
           status: request.status,
           distanceKm,
-          suggestedBasePrice: Number(request.base_price),
+          suggestedBasePrice: Number(request.service.basePrice),
           extraDistanceCharge,
         };
       })
@@ -167,121 +214,153 @@ export async function getNearbyRequests(req, res) {
 
 export async function createOffer(req, res) {
   const { requestId, price, estimatedMinutes, message } = req.body;
+  const offerPrice = parseFiniteNumber(price);
+  const etaMinutes = parseFiniteNumber(estimatedMinutes);
 
-  if (!requestId || !price || !estimatedMinutes) {
+  if (!requestId || offerPrice == null || etaMinutes == null) {
     return res.status(400).json({ message: "requestId, price and estimatedMinutes are required" });
   }
 
-  try {
-    const requestResult = await pool.query(
-      `SELECT sr.current_latitude AS request_latitude,
-              sr.current_longitude AS request_longitude,
-              s.extra_per_km,
-              p.current_latitude AS provider_latitude,
-              p.current_longitude AS provider_longitude
-       FROM service_requests sr
-       JOIN services s ON s.id = sr.service_id
-       JOIN provider_profiles p ON p.user_id = $2
-       WHERE sr.id = $1`,
-      [requestId, req.user.id]
-    );
+  if (!isValidObjectId(requestId)) {
+    return res.status(400).json({ message: "Invalid requestId" });
+  }
 
-    const request = requestResult.rows[0];
+  if (offerPrice <= 0 || etaMinutes <= 0) {
+    return res.status(400).json({ message: "price and estimatedMinutes must be greater than zero" });
+  }
+
+  try {
+    const request = await ServiceRequest.findById(requestId).populate("service", "extraPerKm");
 
     if (!request) {
-      return res.status(404).json({ message: "Request not found or provider profile missing" });
+      return res.status(404).json({ message: "Request not found" });
     }
 
-    if (request.provider_latitude == null || request.provider_longitude == null) {
+    if (!["pending", "offered"].includes(request.status)) {
+      return res.status(409).json({ message: "Request is no longer accepting offers" });
+    }
+
+    const providerProfile = await ProviderProfile.findOne({ user: req.user.id });
+
+    if (!providerProfile) {
+      return res.status(404).json({ message: "Provider profile missing" });
+    }
+
+    if (providerProfile.currentLatitude == null || providerProfile.currentLongitude == null) {
       return res.status(400).json({ message: "Provider location must be set before sending offers" });
     }
 
     const distanceKm = getDistanceKm(
-      Number(request.request_latitude),
-      Number(request.request_longitude),
-      Number(request.provider_latitude),
-      Number(request.provider_longitude)
+      Number(request.currentLatitude),
+      Number(request.currentLongitude),
+      Number(providerProfile.currentLatitude),
+      Number(providerProfile.currentLongitude)
     );
 
-    const extraDistanceCharge = getExtraDistanceCharge(distanceKm, Number(request.extra_per_km));
+    if (distanceKm > 4) {
+      return res.status(403).json({ message: "Request is outside the provider discovery radius" });
+    }
 
-    const offerResult = await pool.query(
-      `INSERT INTO offers
-        (request_id, provider_id, price, estimated_minutes, message, distance_km, extra_distance_charge)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING *`,
-      [requestId, req.user.id, price, estimatedMinutes, message || null, distanceKm, extraDistanceCharge]
-    );
+    const extraDistanceCharge = getExtraDistanceCharge(distanceKm, Number(request.service.extraPerKm));
 
-    await pool.query("UPDATE service_requests SET status = 'offered' WHERE id = $1", [requestId]);
+    const offer = await Offer.create({
+      request: request._id,
+      provider: req.user.id,
+      price: offerPrice,
+      estimatedMinutes: Math.round(etaMinutes),
+      message: message || null,
+      distanceKm,
+      extraDistanceCharge,
+    });
+
+    if (request.status === "pending") {
+      request.status = "offered";
+      await request.save();
+    }
 
     return res.status(201).json({
       offer: {
-        ...offerResult.rows[0],
+        ...offer.toObject(),
+        id: offer._id.toString(),
+        requestId: request._id.toString(),
+        providerId: req.user.id,
         distanceKm,
         extraDistanceCharge,
       },
     });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({ message: "Provider has already sent an offer for this request" });
+    }
+
     return res.status(500).json({ message: "Unable to create offer", error: error.message });
   }
 }
 
 export async function acceptOffer(req, res) {
-  const offerId = Number(req.params.offerId);
+  const offerId = req.params.offerId;
+
+  if (!isValidObjectId(offerId)) {
+    return res.status(400).json({ message: "Invalid offer id" });
+  }
 
   try {
-    const client = await pool.connect();
+    const offer = await Offer.findById(offerId).populate("request");
 
-    try {
-      await client.query("BEGIN");
-
-      const offerResult = await client.query("SELECT * FROM offers WHERE id = $1", [offerId]);
-      const offer = offerResult.rows[0];
-
-      if (!offer) {
-        await client.query("ROLLBACK");
-        return res.status(404).json({ message: "Offer not found" });
-      }
-
-      await client.query("UPDATE offers SET status = 'accepted' WHERE id = $1", [offerId]);
-      await client.query(
-        "UPDATE offers SET status = 'rejected' WHERE request_id = $1 AND id <> $2",
-        [offer.request_id, offerId]
-      );
-      await client.query(
-        "UPDATE service_requests SET status = 'accepted', accepted_offer_id = $1 WHERE id = $2",
-        [offerId, offer.request_id]
-      );
-
-      await client.query("COMMIT");
-
-      return res.json({ message: "Offer accepted", offerId });
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
+    if (!offer) {
+      return res.status(404).json({ message: "Offer not found" });
     }
+
+    const request = offer.request;
+
+    if (request.user.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    if (!["pending", "offered"].includes(request.status) || offer.status !== "pending") {
+      return res.status(409).json({ message: "Offer can no longer be accepted" });
+    }
+
+    await Offer.updateOne({ _id: offer._id }, { status: "accepted" });
+    await Offer.updateMany({ request: request._id, _id: { $ne: offer._id } }, { status: "rejected" });
+    await ServiceRequest.updateOne(
+      { _id: request._id },
+      { status: "accepted", acceptedOffer: offer._id }
+    );
+
+    return res.json({ message: "Offer accepted", offerId });
   } catch (error) {
     return res.status(500).json({ message: "Unable to accept offer", error: error.message });
   }
 }
 
 export async function updateProviderLocation(req, res) {
-  const { latitude, longitude, isAvailable } = req.body;
+  const latitude = parseFiniteNumber(req.body.latitude);
+  const longitude = parseFiniteNumber(req.body.longitude);
+  const { isAvailable } = req.body;
 
   if (latitude == null || longitude == null) {
     return res.status(400).json({ message: "latitude and longitude are required" });
   }
 
   try {
-    await pool.query(
-      `UPDATE provider_profiles
-       SET current_latitude = $1, current_longitude = $2, is_available = COALESCE($3, is_available)
-       WHERE user_id = $4`,
-      [latitude, longitude, isAvailable, req.user.id]
-    );
+    const update = {
+      currentLatitude: latitude,
+      currentLongitude: longitude,
+    };
+
+    if (typeof isAvailable === "boolean") {
+      update.isAvailable = isAvailable;
+    }
+
+    const profile = await ProviderProfile.findOneAndUpdate({ user: req.user.id }, update, {
+      new: true,
+      runValidators: true,
+    });
+
+    if (!profile) {
+      return res.status(404).json({ message: "Provider profile missing" });
+    }
 
     return res.json({ message: "Provider location updated" });
   } catch (error) {
