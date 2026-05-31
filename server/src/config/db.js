@@ -1,11 +1,20 @@
-import pg from "pg";
+import mongoose from "mongoose";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-const { Pool } = pg;
-const defaultDatabaseUrl = "postgresql://postgres:postgres@localhost:5432/roadside_app";
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+dotenv.config({ path: path.resolve(__dirname, "../../../.env"), override: false });
 
-export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || defaultDatabaseUrl,
-});
+const defaultMongoUrl = "mongodb://127.0.0.1:27017/roadside_app";
+
+export async function connectDatabase() {
+  const mongoUrl = process.env.MONGODB_URI || defaultMongoUrl;
+
+  mongoose.set("strictQuery", true);
+
+  await mongoose.connect(mongoUrl);
+}
