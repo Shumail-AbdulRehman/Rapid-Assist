@@ -1,14 +1,31 @@
 {
   "expo": {
-    "name": "Roadside Assistance",
-    "slug": "roadside-assistance",
+    "name": "RoadRescue",
+    "slug": "roadrescue",
     "version": "1.0.0",
     "entryPoint": "./index.js",
-    "extra": {
-      "apiUrl": "http://192.168.1.22:4000/api"
-    },
     "orientation": "portrait",
-    "platforms": ["android", "ios", "web"],
-    "assetBundlePatterns": ["**/*"]
+    "platforms": [
+      "android",
+      "ios",
+      "web"
+    ],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "RoadRescue uses your location to create roadside requests and help providers reach you."
+      }
+    },
+    "android": {
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
+    },
+    "plugins": [
+      "expo-font"
+    ]
   }
 }
