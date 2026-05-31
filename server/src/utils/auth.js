@@ -10,5 +10,6 @@ export async function comparePassword(password, hash) {
 }
 
 export function signToken(payload) {
-  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "7d" });
+  const secret = process.env.JWT_SECRET || "local-development-secret";
+  return jwt.sign(payload, secret, { expiresIn: "7d" });
 }
