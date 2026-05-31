@@ -4,8 +4,8 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import authRoutes from "./routes/authRoutes.js";
+import orderRoutes from "./routes/orderRoutes.js";
 import serviceRoutes from "./routes/serviceRoutes.js";
-import requestRoutes from "./routes/requestRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 
 dotenv.config();
@@ -28,7 +28,7 @@ app.get("/api/health", (_req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/services", serviceRoutes);
-app.use("/api/requests", requestRoutes);
+app.use("/api/orders", orderRoutes);
 app.use("/api/uploads", uploadRoutes);
 
 app.use((error, _req, res, _next) => {
