@@ -7,13 +7,13 @@ Full-stack roadside assistance platform inspired by the InDrive service-bidding 
 - Web: React + Vite
 - Mobile: React Native + Expo
 - API: Node.js + Express
-- Database: PostgreSQL
+- Database: MongoDB + Mongoose
 
 ## Apps
 
 - `apps/web`: React dashboard for users and providers
 - `apps/mobile`: Expo app for the same flows on mobile
-- `server`: Express API with PostgreSQL queries
+- `server`: Express API with Mongoose models
 
 ## Core product flow
 
@@ -26,38 +26,88 @@ Full-stack roadside assistance platform inspired by the InDrive service-bidding 
 
 ## Quick start
 
-1. Create a PostgreSQL database, for example `roadside_app`.
-2. Run the SQL in `server/sql/schema.sql`.
-3. Copy `server/.env.example` to `server/.env`.
-4. Install dependencies:
+1. Install dependencies:
 
 ```bash
 npm install
 ```
 
-5. Start the backend:
+2. Copy `server/.env.example` to `server/.env`.
+
+3. Start MongoDB locally with Docker:
+
+```bash
+npm run db:up
+```
+
+This starts a `mongo:7` container named `roadside-mongodb`. Database files are stored in the Docker named volume `roadside_mongo_data`, so data persists when the container is stopped or recreated.
+
+4. Start the backend:
 
 ```bash
 npm run dev:server
 ```
 
-6. Start the web app:
+5. Start the web app:
 
 ```bash
 npm run dev:web
 ```
 
-7. Start the Expo app:
+6. Start the Expo app:
 
 ```bash
 npm run dev:mobile
 ```
+
+## Local MongoDB commands
+
+- `npm run db:up`: start the local MongoDB container
+- `npm run db:down`: stop MongoDB without deleting stored data
+- `npm run db:logs`: follow MongoDB container logs
+- `npm run db:shell`: open `mongosh` connected to the `roadside_app` database
+- `npm run db:seed:demo`: upsert demo users and providers into local MongoDB
+
+## Demo accounts
+
+Seed demo accounts after MongoDB is running:
+
+```bash
+npm run db:seed:demo
+```
+
+All demo accounts use password `Demo@123`.
+
+- Customer: `03000000001`
+- Fuel provider: `03000000002`
+- Towing provider: `03000000003`
+- Mechanic provider: `03000000004`
+
+## Moving existing Atlas data
+
+Start the local Docker database first:
+
+```bash
+npm run db:up
+```
+
+Then use MongoDB Database Tools to export Atlas and restore into the local Docker MongoDB instance:
+
+```bash
+mkdir -p mongo-dumps
+mongodump --uri "mongodb+srv://USER:PASSWORD@CLUSTER/roadside_app" --archive=mongo-dumps/atlas.archive --gzip
+mongorestore --uri "mongodb://127.0.0.1:27017" --archive=mongo-dumps/atlas.archive --gzip --drop
+```
+
+The `--drop` flag replaces matching local collections with the Atlas data. Remove it if you want to merge into existing local collections instead.
 
 ## Environment notes
 
 - Web API base URL defaults to `http://localhost:4000/api`
 - Mobile API base URL defaults to `http://192.168.100.8:4000/api`
 - Update the Expo URL in `apps/mobile/src/config.js` to your machine IP for physical-device testing
+- API MongoDB URL defaults to Docker MongoDB at `mongodb://127.0.0.1:27017/roadside_app`
+- Default service records are seeded automatically when the backend starts
 
 ## Features implemented
 
