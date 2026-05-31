@@ -1,6 +1,6 @@
 import { CircleMarker, MapContainer, Polyline, Popup, TileLayer } from "react-leaflet";
 
-export function RequestMap({ userLocation, providerLocation, nearbyRequests = [] }) {
+export function RequestMap({ userLocation, providerLocation, nearbyRequests = [], nearbyProviders = [] }) {
   const center = providerLocation || userLocation || [24.8607, 67.0011];
 
   return (
@@ -40,6 +40,19 @@ export function RequestMap({ userLocation, providerLocation, nearbyRequests = []
           >
             <Popup>
               {request.serviceName} | {request.distanceKm} km
+            </Popup>
+          </CircleMarker>
+        ))}
+
+        {nearbyProviders.map((provider) => (
+          <CircleMarker
+            key={provider.id}
+            center={[provider.latitude, provider.longitude]}
+            radius={10}
+            pathOptions={{ color: "#46d0a4", fillColor: "#46d0a4" }}
+          >
+            <Popup>
+              {provider.name} | {provider.distanceKm} km
             </Popup>
           </CircleMarker>
         ))}

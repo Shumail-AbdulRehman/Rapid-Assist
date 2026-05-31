@@ -122,6 +122,12 @@ select {
   gap: 14px;
 }
 
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
 .compact {
   min-width: 280px;
 }
@@ -140,6 +146,110 @@ select {
 textarea {
   min-height: 110px;
   resize: vertical;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.service-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.service-choice {
+  min-height: 118px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  padding: 16px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.service-choice span {
+  display: block;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.service-choice small {
+  color: var(--text-soft);
+  line-height: 1.35;
+}
+
+.service-choice.active {
+  border-color: rgba(255, 184, 77, 0.8);
+  background: rgba(255, 184, 77, 0.14);
+}
+
+.service-options {
+  display: grid;
+  gap: 14px;
+}
+
+.option-group {
+  display: grid;
+  gap: 10px;
+}
+
+.field-label {
+  color: var(--text-soft);
+  font-size: 0.92rem;
+  margin: 0;
+}
+
+.choice-buttons,
+.nearby-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.choice-button,
+.provider-pill {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  padding: 10px 14px;
+}
+
+.choice-button {
+  cursor: pointer;
+}
+
+.choice-button.active {
+  background: var(--accent-2);
+  border-color: var(--accent-2);
+  color: #06231d;
+  font-weight: 700;
+}
+
+.estimate-panel {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.estimate-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  color: var(--text-soft);
+}
+
+.estimate-row strong {
+  color: #fff;
+  text-align: right;
 }
 
 .wide {
@@ -197,7 +307,9 @@ textarea {
 @media (max-width: 960px) {
   .auth-shell,
   .dashboard-shell,
-  .offer-card {
+  .offer-card,
+  .service-choice-grid,
+  .form-row {
     grid-template-columns: 1fr;
   }
 
