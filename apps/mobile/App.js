@@ -1,10 +1,12 @@
 import { StatusBar } from "expo-status-bar";
+import { Feather } from "@expo/vector-icons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as ImagePicker from "expo-image-picker";
 import {
   ActivityIndicator,
   Animated,
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,15 +14,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useFonts } from "expo-font";
-import { IBMPlexMono_400Regular, IBMPlexMono_500Medium } from "@expo-google-fonts/ibm-plex-mono";
-import {
-  Outfit_400Regular,
-  Outfit_500Medium,
-  Outfit_600SemiBold,
-  Outfit_700Bold,
-  Outfit_800ExtraBold,
-} from "@expo-google-fonts/outfit";
 import api, { setToken } from "./src/api";
 import { getCurrentDeviceLocation, searchAddress } from "./src/location";
 import { MapPreview } from "./src/MapPreview";
@@ -34,28 +27,76 @@ const LAHORE_COORDS = {
 const PROVIDER_QUEUE_RADIUS_KM = 300;
 
 const PROVIDER_SERVICE_OPTIONS = [
-  { code: "fuel_delivery", label: "Fuel Delivery", short: "FD" },
-  { code: "car_towing", label: "Car Towing", short: "CT" },
-  { code: "mechanic", label: "Mechanic", short: "MC" },
+  { code: "fuel_delivery", label: "Fuel Delivery", short: "FD", icon: "droplet" },
+  { code: "car_towing", label: "Car Towing", short: "CT", icon: "truck" },
+  { code: "mechanic", label: "Mechanic", short: "MC", icon: "tool" },
 ];
 
+const FONT_FAMILY = Platform.select({
+  ios: "System",
+  android: "sans-serif",
+  default: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+});
+
+const COLORS = {
+  canvas: "#F4F8FF",
+  surface: "#FFFFFF",
+  surfaceSoft: "#F8FAFC",
+  blueSoft: "#EAF3FF",
+  ink: "#0F172A",
+  muted: "#64748B",
+  line: "#DDE8F8",
+  lineStrong: "#B9CFF0",
+  action: "#0B5FFF",
+  actionText: "#FFFFFF",
+  primary: "#0B5FFF",
+  primaryDark: "#084FC7",
+  secondary: "#2563EB",
+  danger: "#D92D20",
+};
+
 const CUSTOMER_TAB_ITEMS = [
-  { key: "home", label: "Request" },
-  { key: "history", label: "History" },
-  { key: "profile", label: "Profile" },
+  { key: "home", label: "Request", icon: "navigation" },
+  { key: "history", label: "History", icon: "clock" },
+  { key: "profile", label: "Profile", icon: "user" },
 ];
 
 const CUSTOMER_BOOKING_STEPS = [
-  { key: "service", label: "Service" },
-  { key: "details", label: "Details" },
-  { key: "review", label: "Review" },
+  { key: "service", label: "Service", icon: "grid" },
+  { key: "details", label: "Details", icon: "edit-3" },
+  { key: "review", label: "Review", icon: "check-circle" },
 ];
 
 const PROVIDER_TAB_ITEMS = [
-  { key: "home", label: "Queue" },
-  { key: "history", label: "History" },
-  { key: "profile", label: "Profile" },
+  { key: "home", label: "Queue", icon: "briefcase" },
+  { key: "history", label: "History", icon: "clock" },
+  { key: "profile", label: "Profile", icon: "user" },
 ];
+
+const SECTION_ICON_BY_LABEL = {
+  Identity: "user",
+  "Provider setup": "shield",
+  Service: "grid",
+  Pickup: "map-pin",
+  Vehicle: "truck",
+  "Fuel request": "droplet",
+  "Tow request": "navigation",
+  "Mechanic request": "tool",
+  Estimate: "credit-card",
+  Progress: "activity",
+  Tracking: "map",
+  "Approval loop": "check-square",
+  "Cash confirmation": "dollar-sign",
+  Availability: "toggle-right",
+  "Nearby jobs": "briefcase",
+  Route: "map",
+  Arrival: "map-pin",
+  "Fuel workflow": "droplet",
+  "Towing workflow": "navigation",
+  Completion: "check-circle",
+  Filters: "filter",
+  Profile: "user",
+};
 
 const TOWING_PROBLEM_OPTIONS = [
   { code: "accident", label: "Accident" },
@@ -341,47 +382,50 @@ function normalizeOrderFormForService(form, service) {
 function getServiceVisual(serviceCode) {
   if (serviceCode === "fuel_delivery") {
     return {
-      title: "Fuel delivery with one clear confirmation loop.",
-      subtitle: "Pick quantity, track the provider live, confirm delivered fuel, then close COD cleanly.",
-      accent: "#6D28D9",
-      bg: "#F7F2FF",
-      border: "#E6D6FF",
+      title: "Fuel to your pin.",
+      subtitle: "Quantity, rider, confirmation.",
+      icon: "droplet",
+      accent: COLORS.primary,
+      bg: COLORS.surface,
+      border: COLORS.line,
     };
   }
 
   if (serviceCode === "car_towing") {
     return {
-      title: "Towing with route clarity from pickup to workshop.",
-      subtitle: "Pickup, destination, transit, SOS, and COD stay readable in one single order view.",
-      accent: "#7C3AED",
-      bg: "#F6F1FF",
-      border: "#E9DDFF",
+      title: "Tow truck to pickup.",
+      subtitle: "Pickup, destination, trip total.",
+      icon: "truck",
+      accent: COLORS.secondary,
+      bg: COLORS.surface,
+      border: COLORS.line,
     };
   }
 
   return {
-    title: "Mechanic service built around the approval loop.",
-    subtitle: "Visit fee first, extra work item by item, then COD confirmation after completion.",
-    accent: "#8B5CF6",
-    bg: "#F8F4FF",
-    border: "#EBDDFF",
+    title: "Mechanic at location.",
+    subtitle: "Visit fee, inspection, approval.",
+    icon: "tool",
+    accent: COLORS.primaryDark,
+    bg: COLORS.surface,
+    border: COLORS.line,
   };
 }
 
 function getStatusTone(status) {
   if (["completed"].includes(status)) {
-    return { bg: "#EAF8EF", text: "#217A4B", border: "#B8E6C8" };
+    return { bg: COLORS.blueSoft, text: COLORS.primaryDark, border: COLORS.lineStrong };
   }
 
   if (["awaiting_fuel_confirmation", "awaiting_extra_work_approval"].includes(status)) {
-    return { bg: "#FFF6E6", text: "#9A5B00", border: "#F4D9A4" };
+    return { bg: "#EEF6FF", text: COLORS.primaryDark, border: COLORS.lineStrong };
   }
 
   if (["cancelled"].includes(status)) {
-    return { bg: "#FDECEC", text: "#B64141", border: "#F7CACA" };
+    return { bg: "#FBEAE7", text: COLORS.danger, border: "#EBC6C0" };
   }
 
-  return { bg: "#F2EEFF", text: "#5B3DB4", border: "#DCCFFF" };
+  return { bg: COLORS.surfaceSoft, text: COLORS.ink, border: COLORS.line };
 }
 
 function getCashConfirmationCopy(order, providerMode = false) {
@@ -516,10 +560,15 @@ function isTimelineStepComplete(order, key) {
 }
 
 function Reveal({ children, delay = 0, style }) {
-  const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(18)).current;
+  const animateIn = Platform.OS !== "web";
+  const opacity = useRef(new Animated.Value(animateIn ? 0 : 1)).current;
+  const translateY = useRef(new Animated.Value(animateIn ? 18 : 0)).current;
 
   useEffect(() => {
+    if (!animateIn) {
+      return undefined;
+    }
+
     const timer = setTimeout(() => {
       Animated.parallel([
         Animated.timing(opacity, {
@@ -538,7 +587,7 @@ function Reveal({ children, delay = 0, style }) {
     }, delay);
 
     return () => clearTimeout(timer);
-  }, [delay, opacity, translateY]);
+  }, [animateIn, delay, opacity, translateY]);
 
   return (
     <Animated.View style={[style, { opacity, transform: [{ translateY }] }]}>
@@ -547,16 +596,11 @@ function Reveal({ children, delay = 0, style }) {
   );
 }
 
+function AppIcon({ name, size = 18, color = COLORS.primary, style }) {
+  return <Feather name={name} size={size} color={color} style={style} />;
+}
+
 export default function App() {
-  const [fontsLoaded] = useFonts({
-    Outfit_400Regular,
-    Outfit_500Medium,
-    Outfit_600SemiBold,
-    Outfit_700Bold,
-    Outfit_800ExtraBold,
-    IBMPlexMono_400Regular,
-    IBMPlexMono_500Medium,
-  });
   const [mode, setMode] = useState("register");
   const [registerForm, setRegisterForm] = useState(createInitialRegister);
   const [loginForm, setLoginForm] = useState({ phone: "", password: "" });
@@ -1446,10 +1490,10 @@ export default function App() {
         <StatusBar style="dark" />
         <ScrollView contentContainerStyle={styles.screen}>
           <Reveal delay={0}>
-            <Text style={styles.appMark}>ROADRESCUE</Text>
-            <Text style={styles.authTitle}>Emergency help, cleaned up into one calm mobile flow.</Text>
+            <BrandMark />
+            <Text style={styles.authTitle}>Road help, fast.</Text>
             <Text style={styles.authSubtitle}>
-              Automatic location, cash on delivery, and role-aware screens for customers and providers.
+              Fuel, towing, and mechanic help in Lahore.
             </Text>
           </Reveal>
 
@@ -1501,6 +1545,7 @@ export default function App() {
                   />
                   <PrimaryButton
                     label="Select workshop image"
+                    icon="image"
                     onPress={() => pickImage("workshopPicture", setRegisterForm)}
                     tone="secondary"
                     disabled={authLoading !== ""}
@@ -1512,6 +1557,7 @@ export default function App() {
                     <>
                       <PrimaryButton
                         label="Select mechanic certificate"
+                        icon="award"
                         onPress={() => pickImage("mechanicCertificateImage", setRegisterForm)}
                         tone="secondary"
                         disabled={authLoading !== ""}
@@ -1526,6 +1572,7 @@ export default function App() {
                   ) : null}
                   <PrimaryButton
                     label="Select CNIC front"
+                    icon="credit-card"
                     onPress={() => pickImage("cnicFrontImage", setRegisterForm)}
                     tone="secondary"
                     disabled={authLoading !== ""}
@@ -1535,6 +1582,7 @@ export default function App() {
                   ) : null}
                   <PrimaryButton
                     label="Select CNIC back"
+                    icon="credit-card"
                     onPress={() => pickImage("cnicBackImage", setRegisterForm)}
                     tone="secondary"
                     disabled={authLoading !== ""}
@@ -1544,6 +1592,7 @@ export default function App() {
                   ) : null}
                   <PrimaryButton
                     label="Capture live selfie"
+                    icon="camera"
                     onPress={() => captureSelfie("selfieImage", setRegisterForm)}
                     tone="secondary"
                     disabled={authLoading !== ""}
@@ -1551,9 +1600,7 @@ export default function App() {
                   {registerForm.selfieImage ? (
                     <Image source={{ uri: registerForm.selfieImage }} style={styles.previewImage} />
                   ) : null}
-                  <Text style={styles.inlineHint}>
-                    Selfie must be captured from the camera. Provider registration is blocked until local CNIC OCR and selfie face match both pass.
-                  </Text>
+                  <Text style={styles.inlineHint}>Selfie and CNIC must match before your profile goes online.</Text>
                   <ChoiceGrid
                     title="Services you handle"
                     items={PROVIDER_SERVICE_OPTIONS.map((item) => ({
@@ -1562,13 +1609,15 @@ export default function App() {
                       active: registerForm.serviceCodes.includes(item.code),
                       onPress: () => toggleProviderServiceInRegister(item.code),
                       short: item.short,
+                      icon: item.icon,
                     }))}
                   />
                 </>
               ) : null}
 
               <PrimaryButton
-                label={authLoading === "register" ? "Uploading and verifying identity..." : "Create account"}
+                label={authLoading === "register" ? "Verifying..." : "Create account"}
+                icon="user-plus"
                 onPress={register}
                 loading={authLoading === "register"}
                 disabled={authLoading !== ""}
@@ -1581,6 +1630,7 @@ export default function App() {
               <Field label="Password" secureTextEntry value={loginForm.password} onChangeText={(value) => setLoginForm((current) => ({ ...current, password: value }))} />
               <PrimaryButton
                 label={authLoading === "login" ? "Signing in..." : "Continue"}
+                icon="log-in"
                 onPress={login}
                 loading={authLoading === "login"}
                 disabled={authLoading !== ""}
@@ -1604,6 +1654,7 @@ export default function App() {
             <HeroPanel
               title={serviceVisual.title}
               subtitle={serviceVisual.subtitle}
+              icon={serviceVisual.icon}
               accent={serviceVisual.accent}
               bg={serviceVisual.bg}
               border={serviceVisual.border}
@@ -1621,15 +1672,15 @@ export default function App() {
           {bookingStep === "service" ? (
             <Reveal delay={120} style={styles.panel}>
               <SectionEyebrow label="Service" />
-              <Text style={styles.sectionTitle}>Choose what you need right now.</Text>
-              <Text style={styles.sectionHint}>Three services only. Fewer choices, faster dispatch.</Text>
+              <Text style={styles.sectionTitle}>What do you need?</Text>
               {servicesUsingFallback ? (
                 <View style={styles.serviceSyncCard}>
                   <Text style={styles.inlineHint}>
-                    Showing the built-in service catalog while the app reconnects to the backend.
+                    Offline catalog shown until the backend reconnects.
                   </Text>
                   <PrimaryButton
                     label={servicesLoading ? "Checking..." : "Retry services"}
+                    icon="refresh-cw"
                     onPress={loadServices}
                     loading={servicesLoading}
                     tone="secondary"
@@ -1648,7 +1699,8 @@ export default function App() {
                       key={service.code}
                       title={service.name}
                       short={option?.short || "SR"}
-                      subtitle={service.description}
+                      icon={visual.icon}
+                      subtitle={visual.subtitle}
                       active={orderForm.serviceCode === service.code}
                       accent={visual.accent}
                       onPress={() => selectOrderService(service)}
@@ -1657,7 +1709,7 @@ export default function App() {
                 })}
               </View>
               <SectionEyebrow label="Pickup" />
-              <Text style={styles.sectionTitle}>We use your live device location.</Text>
+              <Text style={styles.sectionTitle}>Pickup location</Text>
               <LocationCard
                 title="Current pickup point"
                 subtitle={deviceLocation.address || "Location still resolving"}
@@ -1671,6 +1723,7 @@ export default function App() {
               />
               <PrimaryButton
                 label="Continue to details"
+                icon="arrow-right"
                 onPress={() => setBookingStep("details")}
                 tone="secondary"
               />
@@ -1680,7 +1733,7 @@ export default function App() {
           {bookingStep === "details" ? (
             <Reveal delay={120} style={styles.panel}>
               <SectionEyebrow label="Vehicle" />
-              <Text style={styles.sectionTitle}>Basic details only.</Text>
+              <Text style={styles.sectionTitle}>Vehicle details</Text>
               <Field label="Vehicle make" value={orderForm.vehicleMake} onChangeText={(value) => updateOrderField("vehicleMake", value)} />
               <Field label="Vehicle model" value={orderForm.vehicleModel} onChangeText={(value) => updateOrderField("vehicleModel", value)} />
               <Field label="License plate" value={orderForm.licensePlate} onChangeText={(value) => updateOrderField("licensePlate", value)} />
@@ -1696,6 +1749,7 @@ export default function App() {
                       active: orderForm.vehicleType === item,
                       onPress: () => updateOrderField("vehicleType", item),
                       short: item === "bike" ? "BK" : "CR",
+                      icon: item === "bike" ? "navigation" : "truck",
                     }))}
                   />
                   <ChoiceGrid
@@ -1706,6 +1760,7 @@ export default function App() {
                       active: orderForm.fuelType === item,
                       onPress: () => updateOrderField("fuelType", item),
                       short: item === "petrol" ? "PT" : "DS",
+                      icon: "droplet",
                     }))}
                   />
                   <ChoiceGrid
@@ -1716,6 +1771,7 @@ export default function App() {
                       active: Number(orderForm.fuelQuantityLiters) === Number(item),
                       onPress: () => updateOrderField("fuelQuantityLiters", String(item)),
                       short: `${item}L`,
+                      icon: "plus-circle",
                     }))}
                   />
                 </>
@@ -1732,6 +1788,7 @@ export default function App() {
                       active: orderForm.towingProblemType === item,
                       onPress: () => updateOrderField("towingProblemType", item),
                       short: titleFromCode(item).slice(0, 2).toUpperCase(),
+                      icon: "alert-circle",
                     }))}
                   />
                   <Field
@@ -1741,6 +1798,7 @@ export default function App() {
                   />
                   <PrimaryButton
                     label={destinationLoading ? "Searching..." : "Find destination"}
+                    icon="search"
                     onPress={searchDestination}
                     loading={destinationLoading}
                     tone="secondary"
@@ -1798,6 +1856,7 @@ export default function App() {
                         .map((word) => word[0])
                         .join("")
                         .toUpperCase(),
+                      icon: "tool",
                     }))}
                   />
                   <Field
@@ -1805,19 +1864,19 @@ export default function App() {
                     value={orderForm.pickupAddress}
                     onChangeText={(value) => updateOrderField("pickupAddress", value)}
                   />
-                  <Text style={styles.inlineHint}>
-                    The mechanic uses this address with your current map pin. Refresh location if the pin is not correct.
-                  </Text>
+                  <Text style={styles.inlineHint}>Refresh location if the map pin is not correct.</Text>
                 </>
               ) : null}
               <View style={styles.row}>
                 <PrimaryButton
                   label="Back"
+                  icon="arrow-left"
                   onPress={() => setBookingStep("service")}
                   tone="secondary"
                 />
                 <PrimaryButton
                   label="Continue to review"
+                  icon="check-circle"
                   onPress={() => {
                     if (
                       orderForm.serviceCode === "car_towing" &&
@@ -1837,7 +1896,7 @@ export default function App() {
           {bookingStep === "review" ? (
             <Reveal delay={120} style={styles.panel}>
             <SectionEyebrow label="Estimate" />
-            <Text style={styles.sectionTitle}>Straight pricing before dispatch.</Text>
+            <Text style={styles.sectionTitle}>Review price</Text>
             {pricingEstimate ? (
               <>
                 {selectedService?.code === "fuel_delivery" ? (
@@ -1864,11 +1923,13 @@ export default function App() {
             <View style={styles.row}>
               <PrimaryButton
                 label="Back"
+                icon="arrow-left"
                 onPress={() => setBookingStep("details")}
                 tone="secondary"
               />
               <PrimaryButton
                 label={busyAction === "create-order" ? "Submitting..." : "Create request"}
+                icon="send"
                 onPress={createOrder}
                 loading={busyAction === "create-order"}
                 disabled={busyAction !== ""}
@@ -1919,7 +1980,7 @@ export default function App() {
             <ProviderStrip provider={activeOrder.provider} />
           ) : (
             <Text style={styles.inlineHint}>
-              Dispatch is still looking for the closest provider. {(activeOrder.nearbyProviders || []).length} nearby provider(s) are currently visible on the map.
+              Searching nearby providers. {(activeOrder.nearbyProviders || []).length} visible now.
             </Text>
           )}
         </Reveal>
@@ -1927,7 +1988,7 @@ export default function App() {
         {activeExtraWorkRequest ? (
           <Reveal delay={200} style={styles.panel}>
             <SectionEyebrow label="Approval loop" />
-            <Text style={styles.sectionTitle}>Approve only the extra work you actually want.</Text>
+            <Text style={styles.sectionTitle}>Approve extra work</Text>
             {activeExtraWorkRequest.items.map((item) => (
               <View style={styles.workItemCard} key={item.id}>
                 <Text style={styles.workItemTitle}>{item.title}</Text>
@@ -1957,6 +2018,7 @@ export default function App() {
             ))}
             <PrimaryButton
               label={busyAction === "extra-work-decision" ? "Submitting..." : "Submit decision"}
+              icon="check-circle"
               onPress={submitExtraWorkDecisions}
               loading={busyAction === "extra-work-decision"}
               disabled={busyAction !== ""}
@@ -1967,12 +2029,11 @@ export default function App() {
         {activeOrder.serviceCode === "fuel_delivery" &&
         activeOrder.status === "awaiting_fuel_confirmation" ? (
           <Reveal delay={260} style={styles.signalPanel}>
-            <Text style={styles.signalTitle}>Check the fuel physically before you unlock COD.</Text>
-            <Text style={styles.signalBody}>
-              This confirmation step exists to reduce disputes on quantity delivery.
-            </Text>
+            <Text style={styles.signalTitle}>Check fuel quantity.</Text>
+            <Text style={styles.signalBody}>Confirm after delivery.</Text>
             <PrimaryButton
               label={busyAction === "fuel-confirm" ? "Confirming..." : "Confirm quantity delivered"}
+              icon="check-circle"
               onPress={confirmFuelDelivered}
               loading={busyAction === "fuel-confirm"}
               disabled={busyAction !== ""}
@@ -1983,9 +2044,10 @@ export default function App() {
         {activeOrder.serviceCode === "car_towing" &&
         ["assigned", "arrived", "tow_in_transit"].includes(activeOrder.status) ? (
           <Reveal delay={260} style={styles.sosPanel}>
-            <Text style={styles.sosTitle}>Emergency support stays one tap away during towing.</Text>
+            <Text style={styles.sosTitle}>Need urgent help?</Text>
             <PrimaryButton
               label={busyAction === "sos" ? "Sending SOS..." : "Raise SOS"}
+              icon="alert-triangle"
               onPress={raiseSos}
               loading={busyAction === "sos"}
               disabled={busyAction !== ""}
@@ -1997,10 +2059,11 @@ export default function App() {
         {activeOrder.status === "completed" && !activeOrder.payment.customerConfirmed ? (
           <Reveal delay={260} style={styles.panel}>
             <SectionEyebrow label="Cash confirmation" />
-            <Text style={styles.sectionTitle}>Confirm when cash has changed hands.</Text>
+            <Text style={styles.sectionTitle}>Confirm cash</Text>
             <Text style={styles.inlineHint}>{getCashConfirmationCopy(activeOrder).body}</Text>
             <PrimaryButton
               label={busyAction === "customer-payment" ? "Confirming..." : "I paid in cash"}
+              icon="dollar-sign"
               onPress={confirmCustomerPayment}
               loading={busyAction === "customer-payment"}
               disabled={busyAction !== ""}
@@ -2024,16 +2087,17 @@ export default function App() {
         <>
           <Reveal delay={0}>
             <HeroPanel
-              title="Provider queue, rebuilt for fast scanning and fast acceptance."
-              subtitle="Live location, nearby jobs, and one active order at a time in a cleaner dispatch surface."
-              accent="#6D28D9"
-              bg="#F5F0FF"
-              border="#E3D5FF"
+              title="Jobs near your pin."
+              subtitle="Nearest requests, route, payout."
+              icon="briefcase"
+              accent={COLORS.primary}
+              bg={COLORS.surface}
+              border={COLORS.line}
             />
           </Reveal>
           <Reveal delay={80} style={styles.panel}>
             <SectionEyebrow label="Availability" />
-            <Text style={styles.sectionTitle}>Stay visible only when you’re ready to take work.</Text>
+            <Text style={styles.sectionTitle}>Availability</Text>
             <LocationCard
               title="Detected provider location"
               subtitle={deviceLocation.address || "Location still resolving"}
@@ -2046,6 +2110,7 @@ export default function App() {
             </View>
             <PrimaryButton
               label="Refresh nearby jobs"
+              icon="refresh-cw"
               onPress={() => refreshProviderOrders(false)}
               tone="secondary"
               disabled={busyAction !== ""}
@@ -2120,6 +2185,7 @@ export default function App() {
             <SectionEyebrow label="Arrival" />
             <PrimaryButton
               label={busyAction === "mark-arrived" ? "Saving..." : "Mark arrived"}
+              icon="map-pin"
               onPress={markArrived}
               loading={busyAction === "mark-arrived"}
               disabled={busyAction !== ""}
@@ -2133,6 +2199,7 @@ export default function App() {
             {["arrived"].includes(activeOrder.status) ? (
               <PrimaryButton
                 label={busyAction === "start-order" ? "Starting..." : "Start delivery"}
+                icon="play"
                 onPress={startOrder}
                 loading={busyAction === "start-order"}
                 disabled={busyAction !== ""}
@@ -2141,6 +2208,7 @@ export default function App() {
             {["in_progress"].includes(activeOrder.status) ? (
               <PrimaryButton
                 label={busyAction === "fuel-delivered" ? "Saving..." : "Mark fuel delivered"}
+                icon="check-circle"
                 onPress={markFuelDelivered}
                 loading={busyAction === "fuel-delivered"}
                 disabled={busyAction !== ""}
@@ -2158,6 +2226,7 @@ export default function App() {
             {["arrived"].includes(activeOrder.status) ? (
               <PrimaryButton
                 label={busyAction === "start-order" ? "Starting..." : "Start towing transit"}
+                icon="navigation"
                 onPress={startOrder}
                 loading={busyAction === "start-order"}
                 disabled={busyAction !== ""}
@@ -2166,6 +2235,7 @@ export default function App() {
             {["tow_in_transit"].includes(activeOrder.status) ? (
               <PrimaryButton
                 label={busyAction === "complete-order" ? "Completing..." : "Complete towing job"}
+                icon="check-circle"
                 onPress={completeOrder}
                 loading={busyAction === "complete-order"}
                 disabled={busyAction !== ""}
@@ -2179,7 +2249,7 @@ export default function App() {
             {["inspection_pending", "arrived"].includes(activeOrder.status) ? (
               <Reveal delay={260} style={styles.panel}>
                 <SectionEyebrow label="Approval loop" />
-                <Text style={styles.sectionTitle}>Send only the extra work that needs customer consent.</Text>
+                <Text style={styles.sectionTitle}>Extra work request</Text>
                 <Field
                   label="Provider note"
                   value={providerExtraWorkDraft.providerNote}
@@ -2226,15 +2296,17 @@ export default function App() {
                     </View>
                   </View>
                 ))}
-                <PrimaryButton label="Add another item" onPress={addExtraWorkItem} tone="secondary" disabled={busyAction !== ""} />
+                <PrimaryButton label="Add another item" icon="plus" onPress={addExtraWorkItem} tone="secondary" disabled={busyAction !== ""} />
                 <PrimaryButton
                   label={busyAction === "extra-work" ? "Sending..." : "Send extra work request"}
+                  icon="send"
                   onPress={submitExtraWorkRequest}
                   loading={busyAction === "extra-work"}
                   disabled={busyAction !== ""}
                 />
                 <PrimaryButton
                   label={busyAction === "start-order" ? "Starting..." : "Start work without extras"}
+                  icon="play"
                   onPress={startOrder}
                   tone="secondary"
                   loading={busyAction === "start-order"}
@@ -2255,6 +2327,7 @@ export default function App() {
                 <SectionEyebrow label="Completion" />
                 <PrimaryButton
                   label={busyAction === "complete-order" ? "Completing..." : "Complete mechanic job"}
+                  icon="check-circle"
                   onPress={completeOrder}
                   loading={busyAction === "complete-order"}
                   disabled={busyAction !== ""}
@@ -2270,6 +2343,7 @@ export default function App() {
             <Text style={styles.inlineHint}>{getCashConfirmationCopy(activeOrder, true).body}</Text>
             <PrimaryButton
               label={busyAction === "provider-payment" ? "Confirming..." : "I received cash"}
+              icon="dollar-sign"
               onPress={confirmProviderPayment}
               loading={busyAction === "provider-payment"}
               disabled={busyAction !== ""}
@@ -2292,11 +2366,12 @@ export default function App() {
       <>
         <Reveal delay={0}>
           <HeroPanel
-            title="Every request and every job stays readable after the rush."
-            subtitle="History is grouped, quieter, and easier to scan than the active-dispatch view."
-            accent="#7C3AED"
-            bg="#F7F2FF"
-            border="#E7DCFF"
+            title="Trips and payments."
+            subtitle="Past requests and completed jobs."
+            icon="clock"
+            accent={COLORS.secondary}
+            bg={COLORS.surface}
+            border={COLORS.line}
           />
         </Reveal>
         <Reveal delay={80} style={styles.panel}>
@@ -2305,7 +2380,7 @@ export default function App() {
               <SectionEyebrow label="Filters" />
               <Text style={styles.sectionTitle}>Order history</Text>
             </View>
-            <PrimaryButton label="Refresh" onPress={() => loadOrderHistory(false)} tone="secondary" disabled={busyAction !== ""} />
+            <PrimaryButton label="Refresh" icon="refresh-cw" onPress={() => loadOrderHistory(false)} tone="secondary" disabled={busyAction !== ""} />
           </View>
           <View style={styles.row}>
             <ChoicePill label="All" active={historyFilter === "all"} onPress={() => setHistoryFilter("all")} />
@@ -2329,15 +2404,12 @@ export default function App() {
       <>
         <Reveal delay={0}>
           <HeroPanel
-            title={isProvider ? "Provider profile stays operational, not ornamental." : "Your profile stays simple, local, and editable."}
-            subtitle={
-              isProvider
-                ? "Service toggles, workshop identity, and dispatch details belong in one coherent place."
-                : "Identity and profile image stay editable without burying account basics."
-            }
-            accent={isProvider ? "#6D28D9" : "#8B5CF6"}
-            bg={isProvider ? "#F5F0FF" : "#F8F4FF"}
-            border={isProvider ? "#E3D5FF" : "#EBDDFF"}
+            title={isProvider ? "Provider profile." : "Account details."}
+            subtitle={isProvider ? "Documents, services, dispatch location." : "Name, photo, current location."}
+            icon={isProvider ? "shield" : "user"}
+            accent={isProvider ? COLORS.primary : COLORS.secondary}
+            bg={COLORS.surface}
+            border={COLORS.line}
           />
         </Reveal>
         <Reveal delay={80} style={styles.panel}>
@@ -2349,6 +2421,7 @@ export default function App() {
           />
           <PrimaryButton
             label={uploadingField === "profilePicture" ? "Uploading profile image..." : "Upload profile image"}
+            icon="upload"
             onPress={() => pickAndUploadImage("profilePicture", setProfileForm)}
             tone="secondary"
             disabled={uploadingField !== ""}
@@ -2372,6 +2445,7 @@ export default function App() {
               />
               <PrimaryButton
                 label={uploadingField === "workshopPicture" ? "Uploading workshop image..." : "Upload workshop image"}
+                icon="image"
                 onPress={() => pickAndUploadImage("workshopPicture", setProfileForm)}
                 tone="secondary"
                 disabled={uploadingField !== ""}
@@ -2386,6 +2460,7 @@ export default function App() {
               />
               <PrimaryButton
                 label={uploadingField === "cnicFrontImage" ? "Uploading CNIC front..." : "Upload CNIC front"}
+                icon="credit-card"
                 onPress={() => pickAndUploadImage("cnicFrontImage", setProfileForm)}
                 tone="secondary"
                 disabled={uploadingField !== ""}
@@ -2395,6 +2470,7 @@ export default function App() {
               ) : null}
               <PrimaryButton
                 label={uploadingField === "cnicBackImage" ? "Uploading CNIC back..." : "Upload CNIC back"}
+                icon="credit-card"
                 onPress={() => pickAndUploadImage("cnicBackImage", setProfileForm)}
                 tone="secondary"
                 disabled={uploadingField !== ""}
@@ -2410,6 +2486,7 @@ export default function App() {
                   active: profileForm.serviceCodes.includes(item.code),
                   onPress: () => toggleProfileProviderService(item.code),
                   short: item.short,
+                  icon: item.icon,
                 }))}
               />
             </>
@@ -2424,6 +2501,7 @@ export default function App() {
 
           <PrimaryButton
             label={busyAction === "save-profile" ? "Saving..." : "Save profile"}
+            icon="save"
             onPress={saveProfile}
             loading={busyAction === "save-profile"}
             disabled={busyAction !== "" || uploadingField !== ""}
@@ -2442,11 +2520,11 @@ export default function App() {
         <ScrollView contentContainerStyle={styles.screen}>
           <Reveal delay={0}>
             <TopHeader
-              title={session.user?.name || "RoadRescue"}
+              title={session.user?.name || "Rapid Assist"}
               subtitle={
                 isProvider
-                  ? "Provider dispatch, rebuilt for faster scanning and cleaner control."
-                  : "Customer dispatch, rebuilt around fewer choices and stronger feedback."
+                  ? "Nearby jobs and active route"
+                  : "Request roadside help"
               }
               phone={session.user?.phone}
               onLogout={resetSession}
@@ -2467,14 +2545,6 @@ export default function App() {
     );
   }
 
-  if (!fontsLoaded) {
-    return (
-      <View style={styles.loaderShell}>
-        <ActivityIndicator size="large" color="#6D28D9" />
-      </View>
-    );
-  }
-
   if (!session.user) {
     return renderAuthScreen();
   }
@@ -2485,8 +2555,6 @@ export default function App() {
 function AppCanvas({ children }) {
   return (
     <View style={styles.safeArea}>
-      <View style={styles.backdropOrbA} />
-      <View style={styles.backdropOrbB} />
       <View style={styles.backdropGrid} />
       {children}
     </View>
@@ -2499,22 +2567,38 @@ function TopHeader({ title, subtitle, phone, onLogout }) {
   return (
     <View style={styles.topHeader}>
       <View style={styles.topHeaderCopy}>
-        <Text style={styles.appMark}>ROADRESCUE</Text>
+        <BrandMark />
         <Text style={styles.topTitle}>{`Hello, ${firstName}`}</Text>
         <Text style={styles.topSubtitle}>{subtitle}</Text>
       </View>
       <View style={styles.topHeaderMeta}>
         <Text style={styles.phoneBadge}>{phone}</Text>
-        <PrimaryButton label="Logout" onPress={onLogout} tone="secondary" compact />
+        <PrimaryButton label="Logout" icon="log-out" onPress={onLogout} tone="secondary" compact />
       </View>
     </View>
   );
 }
 
-function HeroPanel({ title, subtitle, accent, bg, border }) {
+function BrandMark() {
+  return (
+    <View style={styles.appMarkRow}>
+      <View style={styles.appMarkIcon}>
+        <AppIcon name="navigation" size={12} color={COLORS.actionText} />
+      </View>
+      <Text style={styles.appMark}>RAPID ASSIST</Text>
+    </View>
+  );
+}
+
+function HeroPanel({ title, subtitle, icon = "navigation", accent, bg, border }) {
   return (
     <View style={[styles.heroPanel, { backgroundColor: bg, borderColor: border }]}>
-      <View style={[styles.heroAccent, { backgroundColor: accent }]} />
+      <View style={styles.heroVisualRow}>
+        <View style={[styles.heroIconBadge, { backgroundColor: accent }]}>
+          <AppIcon name={icon} size={20} color={COLORS.actionText} />
+        </View>
+        <View style={[styles.heroAccentRail, { backgroundColor: accent }]} />
+      </View>
       <Text style={styles.heroTitle}>{title}</Text>
       <Text style={styles.heroSubtitle}>{subtitle}</Text>
     </View>
@@ -2523,22 +2607,26 @@ function HeroPanel({ title, subtitle, accent, bg, border }) {
 
 function ActiveOrderHero({ order, providerMode = false }) {
   const tone = getStatusTone(order.status);
+  const visual = getServiceVisual(order.serviceCode);
 
   return (
     <View style={styles.heroPanel}>
       <View style={styles.heroTopRow}>
-        <View>
-          <Text style={styles.monoLabel}>{providerMode ? "ACTIVE JOB" : "ACTIVE REQUEST"}</Text>
-          <Text style={styles.heroTitle}>{order.serviceName}</Text>
+        <View style={styles.activeHeroTitleRow}>
+          <View style={[styles.heroIconBadge, { backgroundColor: visual.accent }]}>
+            <AppIcon name={visual.icon} size={20} color={COLORS.actionText} />
+          </View>
+          <View>
+            <Text style={styles.monoLabel}>{providerMode ? "ACTIVE JOB" : "ACTIVE REQUEST"}</Text>
+            <Text style={styles.heroTitle}>{order.serviceName}</Text>
+          </View>
         </View>
         <View style={[styles.statusChip, { backgroundColor: tone.bg, borderColor: tone.border }]}>
           <Text style={[styles.statusChipText, { color: tone.text }]}>{titleFromCode(order.status)}</Text>
         </View>
       </View>
       <Text style={styles.heroSubtitle}>
-        {providerMode
-          ? "Keep one active job visible, track the next required action, and close COD cleanly."
-          : "One clear progress rail, one provider strip, and one obvious next step."}
+        {providerMode ? "Route, job status, and cash confirmation." : "Provider, status, and cash confirmation."}
       </Text>
       <View style={styles.metricBand}>
         <MetricPill label="Order no" value={order.orderNo} />
@@ -2594,7 +2682,7 @@ function OrderTimeline({ order }) {
   );
 }
 
-function ServiceCard({ title, subtitle, short, active, accent, onPress }) {
+function ServiceCard({ title, subtitle, short, icon, active, accent, onPress }) {
   return (
     <Pressable
       onPress={onPress}
@@ -2604,32 +2692,36 @@ function ServiceCard({ title, subtitle, short, active, accent, onPress }) {
         pressed && styles.pressedLite,
       ]}
     >
-      <View style={styles.serviceCardTop}>
-        <View style={styles.serviceGlyphShell}>
-          <View style={[styles.serviceGlyph, { backgroundColor: accent }]}>
-            <Text style={styles.serviceGlyphText}>{short}</Text>
-          </View>
-        </View>
-        <View style={[styles.serviceStatePill, active && styles.serviceStatePillActive]}>
-          <Text style={[styles.serviceStateText, active && styles.serviceStateTextActive]}>
-            {active ? "Selected" : "On demand"}
-          </Text>
+      <View style={[styles.serviceGlyph, { backgroundColor: active ? accent : COLORS.surfaceSoft }]}>
+        {icon ? (
+          <AppIcon name={icon} size={22} color={active ? COLORS.actionText : accent} />
+        ) : (
+          <Text style={[styles.serviceGlyphText, active && styles.serviceGlyphTextActive]}>{short}</Text>
+        )}
+      </View>
+      <View style={styles.serviceCopy}>
+        <Text style={styles.serviceCardTitle}>{title}</Text>
+        <Text style={styles.serviceCardSubtitle} numberOfLines={2}>{subtitle}</Text>
+      </View>
+      <View style={styles.serviceActionWrap}>
+        <View style={[styles.serviceStateDot, active && styles.serviceStateDotActive]} />
+        <View style={styles.serviceArrow}>
+          <AppIcon name="chevron-right" size={17} color={COLORS.ink} />
         </View>
       </View>
-      <Text style={styles.serviceCardTitle}>{title}</Text>
-      <Text style={styles.serviceCardSubtitle}>{subtitle}</Text>
     </Pressable>
   );
 }
 
 function ProviderQueueCard({ order, busy, onAccept }) {
   const option = PROVIDER_SERVICE_OPTIONS.find((item) => item.code === order.serviceCode);
+  const visual = getServiceVisual(order.serviceCode);
 
   return (
     <View style={styles.queueCard}>
       <View style={styles.queueCardHead}>
         <View style={styles.queueBadge}>
-          <Text style={styles.queueBadgeText}>{option?.short || "JB"}</Text>
+          <AppIcon name={visual.icon || option?.icon || "briefcase" } size={19} color={COLORS.actionText} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.queueTitle}>{order.serviceName}</Text>
@@ -2641,7 +2733,7 @@ function ProviderQueueCard({ order, busy, onAccept }) {
       <Text style={styles.queueHint}>{order.pickupLocation.address || "Pinned location only"}</Text>
       <Text style={styles.queueHint}>Vehicle: {order.customerVehicle.licensePlate}</Text>
       <MetricRow label="Current total" value={formatMoney(order.pricing.total)} emphasized />
-      <PrimaryButton label={busy ? "Accepting..." : "Accept job"} onPress={onAccept} loading={busy} />
+      <PrimaryButton label={busy ? "Accepting..." : "Accept job"} icon="check-circle" onPress={onAccept} loading={busy} />
     </View>
   );
 }
@@ -2659,6 +2751,13 @@ function SegmentedControl({ items, value, onChange }) {
             pressed && styles.pressedLite,
           ]}
         >
+          {item.icon ? (
+            <AppIcon
+              name={item.icon}
+              size={15}
+              color={value === item.key ? COLORS.actionText : COLORS.muted}
+            />
+          ) : null}
           <Text style={[styles.segmentedLabel, value === item.key && styles.segmentedLabelActive]}>
             {item.label}
           </Text>
@@ -2683,7 +2782,15 @@ function ChoiceGrid({ title, items }) {
               pressed && styles.pressedLite,
             ]}
           >
-            <Text style={[styles.choiceShort, item.active && styles.choiceShortActive]}>{item.short}</Text>
+            {item.icon ? (
+              <AppIcon
+                name={item.icon}
+                size={15}
+                color={item.active ? COLORS.actionText : COLORS.primary}
+              />
+            ) : (
+              <Text style={[styles.choiceShort, item.active && styles.choiceShortActive]}>{item.short}</Text>
+            )}
             <Text style={[styles.choiceLabel, item.active && styles.choiceLabelActive]}>{item.label}</Text>
           </Pressable>
         ))}
@@ -2721,7 +2828,7 @@ function Field({ label, multiline = false, style, ...props }) {
     <View style={styles.fieldWrap}>
       <Text style={styles.fieldLabel}>{label}</Text>
       <TextInput
-        placeholderTextColor="#9B94B3"
+        placeholderTextColor={COLORS.muted}
         style={[styles.fieldInput, multiline && styles.fieldTextarea, style]}
         multiline={multiline}
         {...props}
@@ -2733,12 +2840,18 @@ function Field({ label, multiline = false, style, ...props }) {
 function LocationCard({ title, subtitle, loading, onPress }) {
   return (
     <View style={styles.locationCard}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.groupTitle}>{title}</Text>
-        <Text style={styles.locationText}>{subtitle}</Text>
+      <View style={styles.locationCopyRow}>
+        <View style={styles.locationIconBadge}>
+          <AppIcon name="map-pin" size={17} color={COLORS.primary} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.groupTitle}>{title}</Text>
+          <Text style={styles.locationText}>{subtitle}</Text>
+        </View>
       </View>
       <PrimaryButton
         label={loading ? "Locating..." : "Refresh"}
+        icon="refresh-cw"
         onPress={onPress}
         loading={loading}
         tone="secondary"
@@ -2750,7 +2863,14 @@ function LocationCard({ title, subtitle, loading, onPress }) {
 }
 
 function SectionEyebrow({ label }) {
-  return <Text style={styles.sectionEyebrow}>{label}</Text>;
+  const icon = SECTION_ICON_BY_LABEL[label] || "circle";
+
+  return (
+    <View style={styles.sectionEyebrowRow}>
+      <AppIcon name={icon} size={13} color={COLORS.primary} />
+      <Text style={styles.sectionEyebrow}>{label}</Text>
+    </View>
+  );
 }
 
 function MetricRow({ label, value, emphasized = false }) {
@@ -2781,6 +2901,10 @@ function InfoRow({ label, value, strong = false }) {
 }
 
 function FeedbackMessage({ message, type }) {
+  const icon = type === "error" ? "alert-circle" : type === "success" ? "check-circle" : "info";
+  const iconColor =
+    type === "error" ? COLORS.danger : type === "success" ? COLORS.primaryDark : COLORS.primary;
+
   return (
     <View
       style={[
@@ -2789,6 +2913,7 @@ function FeedbackMessage({ message, type }) {
         type === "success" && styles.feedbackSuccess,
       ]}
     >
+      <AppIcon name={icon} size={16} color={iconColor} />
       <Text
         style={[
           styles.feedbackText,
@@ -2804,13 +2929,19 @@ function FeedbackMessage({ message, type }) {
 
 function HistoryCard({ order }) {
   const tone = getStatusTone(order.status);
+  const visual = getServiceVisual(order.serviceCode);
 
   return (
     <View style={styles.historyCard}>
       <View style={styles.historyHead}>
-        <View>
-          <Text style={styles.historyTitle}>{order.serviceName}</Text>
-          <Text style={styles.historyMeta}>{order.orderNo}</Text>
+        <View style={styles.historyTitleWrap}>
+          <View style={[styles.historyIconBadge, { backgroundColor: visual.accent }]}>
+            <AppIcon name={visual.icon} size={16} color={COLORS.actionText} />
+          </View>
+          <View>
+            <Text style={styles.historyTitle}>{order.serviceName}</Text>
+            <Text style={styles.historyMeta}>{order.orderNo}</Text>
+          </View>
         </View>
         <View style={[styles.statusChip, { backgroundColor: tone.bg, borderColor: tone.border }]}>
           <Text style={[styles.statusChipText, { color: tone.text }]}>{titleFromCode(order.status)}</Text>
@@ -2825,12 +2956,17 @@ function HistoryCard({ order }) {
 
 function PrimaryButton({
   label,
+  icon,
   onPress,
   loading = false,
   disabled = false,
   tone = "primary",
   compact = false,
 }) {
+  const iconColor =
+    tone === "secondary" ? COLORS.ink : tone === "danger" ? COLORS.actionText : COLORS.actionText;
+  const orbIcon = tone === "danger" ? "alert-triangle" : "arrow-right";
+
   return (
     <Pressable
       onPress={onPress}
@@ -2849,9 +2985,10 @@ function PrimaryButton({
           {loading ? (
             <ActivityIndicator
               size="small"
-              color={tone === "secondary" ? "#5B3DB4" : tone === "danger" ? "#B64141" : "#FFFFFF"}
+              color={tone === "secondary" ? COLORS.ink : COLORS.actionText}
             />
           ) : null}
+          {!loading && icon ? <AppIcon name={icon} size={compact ? 14 : 16} color={iconColor} /> : null}
           <Text
             style={[
               styles.buttonText,
@@ -2871,15 +3008,11 @@ function PrimaryButton({
               tone === "danger" && styles.buttonOrbDanger,
             ]}
           >
-            <Text
-              style={[
-                styles.buttonOrbText,
-                tone === "secondary" && styles.buttonOrbTextSecondary,
-                tone === "danger" && styles.buttonOrbTextDanger,
-              ]}
-            >
-              {tone === "danger" ? "!" : "→"}
-            </Text>
+            <AppIcon
+              name={orbIcon}
+              size={15}
+              color={tone === "secondary" ? COLORS.ink : COLORS.actionText}
+            />
           </View>
         ) : null}
       </View>
@@ -2890,34 +3023,16 @@ function PrimaryButton({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#F7F4FF",
-  },
-  backdropOrbA: {
-    position: "absolute",
-    top: -120,
-    right: -80,
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-    backgroundColor: "rgba(109, 40, 217, 0.11)",
-  },
-  backdropOrbB: {
-    position: "absolute",
-    top: 210,
-    left: -85,
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: "rgba(168, 85, 247, 0.09)",
+    backgroundColor: COLORS.canvas,
   },
   backdropGrid: {
     ...StyleSheet.absoluteFillObject,
     borderTopWidth: 1,
-    borderColor: "rgba(109, 40, 217, 0.05)",
+    borderColor: "rgba(11, 95, 255, 0.04)",
   },
   loaderShell: {
     flex: 1,
-    backgroundColor: "#F7F4FF",
+    backgroundColor: COLORS.canvas,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2927,23 +3042,39 @@ const styles = StyleSheet.create({
     paddingBottom: 72,
     gap: 18,
   },
-  appMark: {
-    color: "#7B5CD6",
-    fontFamily: "IBMPlexMono_500Medium",
-    fontSize: 11,
-    letterSpacing: 2.2,
+  appMarkRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
     marginBottom: 10,
   },
+  appMarkIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 7,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  appMark: {
+    color: COLORS.primary,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "700",
+    fontSize: 12,
+    letterSpacing: 0.6,
+  },
   authTitle: {
-    color: "#1F1537",
-    fontFamily: "Outfit_800ExtraBold",
+    color: COLORS.ink,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "700",
     fontSize: 34,
     lineHeight: 38,
     maxWidth: 360,
   },
   authSubtitle: {
-    color: "#6D6587",
-    fontFamily: "Outfit_400Regular",
+    color: COLORS.muted,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "400",
     fontSize: 15,
     lineHeight: 23,
     marginTop: 10,
@@ -2954,46 +3085,49 @@ const styles = StyleSheet.create({
   },
   segmented: {
     flexDirection: "row",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 22,
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
     padding: 6,
     borderWidth: 1,
-    borderColor: "#E7DFFF",
+    borderColor: COLORS.line,
     gap: 6,
-    shadowColor: "#6D28D9",
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 3,
+    shadowColor: COLORS.ink,
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 2,
   },
   segmentedItem: {
     flex: 1,
     minHeight: 46,
-    borderRadius: 14,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
+    flexDirection: "row",
+    gap: 6,
     paddingHorizontal: 10,
   },
   segmentedItemActive: {
-    backgroundColor: "#6D28D9",
+    backgroundColor: COLORS.primary,
   },
   segmentedLabel: {
-    color: "#82789D",
-    fontFamily: "Outfit_600SemiBold",
+    color: COLORS.muted,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "600",
     fontSize: 14,
   },
   segmentedLabelActive: {
-    color: "#FFFFFF",
+    color: COLORS.actionText,
   },
   formPanel: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 28,
+    backgroundColor: COLORS.surface,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#E8DFFF",
+    borderColor: COLORS.line,
     padding: 18,
     gap: 14,
-    shadowColor: "#4C1D95",
-    shadowOpacity: 0.08,
+    shadowColor: COLORS.ink,
+    shadowOpacity: 0.06,
     shadowRadius: 22,
     shadowOffset: { width: 0, height: 12 },
     elevation: 4,
@@ -3012,25 +3146,28 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   topTitle: {
-    color: "#1D1630",
-    fontFamily: "Outfit_800ExtraBold",
+    color: COLORS.ink,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "700",
     fontSize: 30,
     lineHeight: 34,
   },
   topSubtitle: {
-    color: "#6F6986",
-    fontFamily: "Outfit_400Regular",
+    color: COLORS.muted,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "400",
     fontSize: 14,
     lineHeight: 21,
     marginTop: 10,
   },
   phoneBadge: {
-    color: "#6D28D9",
-    fontFamily: "IBMPlexMono_500Medium",
+    color: COLORS.ink,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "600",
     fontSize: 11,
-    backgroundColor: "#F6F1FF",
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: "#E0D2FF",
+    borderColor: COLORS.line,
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -3039,40 +3176,48 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   panel: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 28,
+    backgroundColor: COLORS.surface,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#E8DFFF",
+    borderColor: COLORS.line,
     padding: 18,
     gap: 14,
-    shadowColor: "#4C1D95",
-    shadowOpacity: 0.08,
+    shadowColor: COLORS.ink,
+    shadowOpacity: 0.06,
     shadowRadius: 22,
     shadowOffset: { width: 0, height: 12 },
     elevation: 4,
   },
   heroPanel: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: "#E8DFFF",
-    borderRadius: 30,
+    borderColor: COLORS.line,
+    borderRadius: 8,
     padding: 20,
     gap: 14,
     overflow: "hidden",
-    shadowColor: "#4C1D95",
-    shadowOpacity: 0.08,
+    shadowColor: COLORS.ink,
+    shadowOpacity: 0.07,
     shadowRadius: 24,
     shadowOffset: { width: 0, height: 12 },
     elevation: 4,
   },
-  heroAccent: {
-    position: "absolute",
-    top: 16,
-    right: 16,
-    width: 72,
-    height: 72,
-    borderRadius: 22,
-    opacity: 0.18,
+  heroVisualRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  heroIconBadge: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroAccentRail: {
+    width: 52,
+    height: 4,
+    borderRadius: 2,
   },
   heroTopRow: {
     flexDirection: "row",
@@ -3080,16 +3225,24 @@ const styles = StyleSheet.create({
     gap: 12,
     alignItems: "flex-start",
   },
+  activeHeroTitleRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    flex: 1,
+  },
   heroTitle: {
-    color: "#20163A",
-    fontFamily: "Outfit_800ExtraBold",
+    color: COLORS.ink,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "700",
     fontSize: 28,
     lineHeight: 32,
     maxWidth: 300,
   },
   heroSubtitle: {
-    color: "#6E6788",
-    fontFamily: "Outfit_400Regular",
+    color: COLORS.muted,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "400",
     fontSize: 14,
     lineHeight: 22,
     maxWidth: 330,
@@ -3101,15 +3254,17 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   statusChipText: {
-    fontFamily: "IBMPlexMono_500Medium",
+    fontFamily: FONT_FAMILY,
+    fontWeight: "600",
     fontSize: 11,
-    letterSpacing: 0.8,
+    letterSpacing: 0.2,
   },
   monoLabel: {
-    color: "#8A79BC",
-    fontFamily: "IBMPlexMono_500Medium",
+    color: COLORS.primary,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "600",
     fontSize: 11,
-    letterSpacing: 1.8,
+    letterSpacing: 0.6,
     marginBottom: 6,
   },
   metricBand: {
@@ -3118,49 +3273,52 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   metricPill: {
-    backgroundColor: "#F8F5FF",
+    backgroundColor: COLORS.surfaceSoft,
     borderWidth: 1,
-    borderColor: "#E4D9FF",
-    borderRadius: 18,
+    borderColor: COLORS.line,
+    borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 12,
     minWidth: 96,
     flexGrow: 1,
   },
   metricPillLabel: {
-    color: "#8A83A5",
-    fontFamily: "IBMPlexMono_400Regular",
+    color: COLORS.muted,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "400",
     fontSize: 10,
     marginBottom: 4,
   },
   metricPillValue: {
-    color: "#241840",
-    fontFamily: "Outfit_700Bold",
+    color: COLORS.ink,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "700",
     fontSize: 14,
   },
   sectionEyebrow: {
-    color: "#7D57E7",
-    fontFamily: "IBMPlexMono_500Medium",
+    color: COLORS.primary,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "600",
     fontSize: 11,
-    letterSpacing: 1.8,
+    letterSpacing: 0.6,
+  },
+  sectionEyebrowRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   sectionTitle: {
-    color: "#22193C",
-    fontFamily: "Outfit_700Bold",
+    color: COLORS.ink,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "700",
     fontSize: 22,
     lineHeight: 26,
   },
-  sectionHint: {
-    color: "#6F6886",
-    fontFamily: "Outfit_400Regular",
-    fontSize: 14,
-    lineHeight: 20,
-  },
   serviceSyncCard: {
-    backgroundColor: "#FFF8EB",
+    backgroundColor: COLORS.blueSoft,
     borderWidth: 1,
-    borderColor: "#F0D6A1",
-    borderRadius: 22,
+    borderColor: COLORS.lineStrong,
+    borderRadius: 8,
     padding: 14,
     gap: 12,
   },
@@ -3168,74 +3326,74 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   serviceCard: {
-    backgroundColor: "#FCFAFF",
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: "#E6DBFF",
-    borderRadius: 24,
-    padding: 16,
-    gap: 10,
-    shadowColor: "#6D28D9",
-    shadowOpacity: 0.05,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 2,
+    borderColor: COLORS.line,
+    borderRadius: 8,
+    padding: 14,
+    gap: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    shadowColor: COLORS.ink,
+    shadowOpacity: 0.04,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 1,
   },
   serviceCardActive: {
-    backgroundColor: "#F5EDFF",
-  },
-  serviceCardTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  serviceGlyphShell: {
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E6DBFF",
-    borderRadius: 18,
-    padding: 4,
+    backgroundColor: COLORS.blueSoft,
   },
   serviceGlyph: {
-    width: 44,
-    height: 44,
-    borderRadius: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
   },
   serviceGlyphText: {
-    color: "#FFFFFF",
-    fontFamily: "IBMPlexMono_500Medium",
+    color: COLORS.ink,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "600",
     fontSize: 13,
   },
-  serviceStatePill: {
-    backgroundColor: "#F4EEFF",
-    borderWidth: 1,
-    borderColor: "#E2D5FF",
+  serviceGlyphTextActive: {
+    color: COLORS.actionText,
+  },
+  serviceCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  serviceActionWrap: {
+    alignItems: "center",
+    gap: 8,
+  },
+  serviceStateDot: {
+    width: 7,
+    height: 7,
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    backgroundColor: COLORS.lineStrong,
   },
-  serviceStatePillActive: {
-    backgroundColor: "#6D28D9",
-    borderColor: "#6D28D9",
+  serviceStateDotActive: {
+    backgroundColor: COLORS.primary,
   },
-  serviceStateText: {
-    color: "#765BBD",
-    fontFamily: "IBMPlexMono_500Medium",
-    fontSize: 10,
-    letterSpacing: 0.4,
-  },
-  serviceStateTextActive: {
-    color: "#FFFFFF",
+  serviceArrow: {
+    width: 28,
+    height: 28,
+    borderRadius: 999,
+    backgroundColor: COLORS.surfaceSoft,
+    alignItems: "center",
+    justifyContent: "center",
   },
   serviceCardTitle: {
-    color: "#261A42",
-    fontFamily: "Outfit_700Bold",
+    color: COLORS.ink,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "700",
     fontSize: 18,
   },
   serviceCardSubtitle: {
-    color: "#6E6688",
-    fontFamily: "Outfit_400Regular",
+    color: COLORS.muted,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "400",
     fontSize: 14,
     lineHeight: 20,
   },
@@ -3243,19 +3401,21 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   fieldLabel: {
-    color: "#47346F",
-    fontFamily: "Outfit_500Medium",
+    color: COLORS.ink,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "500",
     fontSize: 13,
   },
   fieldInput: {
-    backgroundColor: "#FBF9FF",
+    backgroundColor: COLORS.surfaceSoft,
     borderWidth: 1,
-    borderColor: "#E6DBFF",
-    borderRadius: 18,
+    borderColor: COLORS.line,
+    borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 14,
-    color: "#231A3B",
-    fontFamily: "Outfit_400Regular",
+    color: COLORS.ink,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "400",
     fontSize: 15,
   },
   fieldTextarea: {
@@ -3263,23 +3423,38 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
   },
   locationCard: {
-    backgroundColor: "#FBF9FF",
+    backgroundColor: COLORS.surfaceSoft,
     borderWidth: 1,
-    borderColor: "#E6DBFF",
-    borderRadius: 22,
+    borderColor: COLORS.line,
+    borderRadius: 8,
     padding: 14,
     gap: 12,
   },
+  locationCopyRow: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "flex-start",
+  },
+  locationIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: COLORS.blueSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   locationText: {
-    color: "#2A1E44",
-    fontFamily: "Outfit_500Medium",
+    color: COLORS.ink,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "500",
     fontSize: 14,
     lineHeight: 20,
     marginTop: 4,
   },
   groupTitle: {
-    color: "#281D45",
-    fontFamily: "Outfit_600SemiBold",
+    color: COLORS.ink,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "600",
     fontSize: 15,
   },
   choiceGridWrap: {
@@ -3291,36 +3466,39 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   choiceCard: {
-    width: "31%",
-    minWidth: 96,
-    backgroundColor: "#FBF9FF",
+    minWidth: 0,
+    backgroundColor: COLORS.surfaceSoft,
     borderWidth: 1,
-    borderColor: "#E6DBFF",
-    borderRadius: 18,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
+    borderColor: COLORS.line,
+    borderRadius: 999,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
     gap: 8,
+    flexDirection: "row",
+    alignItems: "center",
   },
   choiceCardActive: {
-    backgroundColor: "#6D28D9",
-    borderColor: "#6D28D9",
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
   },
   choiceShort: {
-    color: "#8B82A8",
-    fontFamily: "IBMPlexMono_500Medium",
+    color: COLORS.primary,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "600",
     fontSize: 11,
   },
   choiceShortActive: {
-    color: "#FFFFFF",
+    color: COLORS.actionText,
   },
   choiceLabel: {
-    color: "#251B40",
-    fontFamily: "Outfit_600SemiBold",
+    color: COLORS.ink,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "600",
     fontSize: 14,
     lineHeight: 18,
   },
   choiceLabelActive: {
-    color: "#FFFFFF",
+    color: COLORS.actionText,
   },
   metricRow: {
     flexDirection: "row",
@@ -3329,25 +3507,28 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   metricLabel: {
-    color: "#807999",
-    fontFamily: "IBMPlexMono_400Regular",
+    color: COLORS.muted,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "400",
     fontSize: 12,
     flex: 1,
   },
   metricValue: {
-    color: "#23193D",
-    fontFamily: "Outfit_600SemiBold",
+    color: COLORS.ink,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "600",
     fontSize: 15,
   },
   metricValueStrong: {
-    color: "#6D28D9",
-    fontFamily: "Outfit_800ExtraBold",
+    color: COLORS.primary,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "700",
   },
   providerStrip: {
-    backgroundColor: "#FCFAFF",
+    backgroundColor: COLORS.surfaceSoft,
     borderWidth: 1,
-    borderColor: "#E7DCFF",
-    borderRadius: 22,
+    borderColor: COLORS.line,
+    borderRadius: 8,
     padding: 14,
     flexDirection: "row",
     alignItems: "center",
@@ -3356,24 +3537,27 @@ const styles = StyleSheet.create({
   providerBadge: {
     width: 44,
     height: 44,
-    borderRadius: 14,
-    backgroundColor: "#6D28D9",
+    borderRadius: 8,
+    backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",
   },
   providerBadgeText: {
-    color: "#FFFFFF",
-    fontFamily: "IBMPlexMono_500Medium",
+    color: COLORS.actionText,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "600",
     fontSize: 13,
   },
   providerName: {
-    color: "#261C40",
-    fontFamily: "Outfit_700Bold",
+    color: COLORS.ink,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "700",
     fontSize: 15,
   },
   providerPhone: {
-    color: "#7D7696",
-    fontFamily: "IBMPlexMono_400Regular",
+    color: COLORS.muted,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "400",
     fontSize: 12,
     marginTop: 4,
   },
@@ -3393,57 +3577,61 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: "#E4D7FF",
+    backgroundColor: COLORS.line,
     borderWidth: 2,
-    borderColor: "#D5C2FF",
+    borderColor: COLORS.lineStrong,
   },
   timelineDotActive: {
-    backgroundColor: "#6D28D9",
-    borderColor: "#6D28D9",
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
   },
   timelineLine: {
     width: 2,
     flex: 1,
     minHeight: 24,
-    backgroundColor: "#E6DDFF",
+    backgroundColor: COLORS.line,
     marginTop: 4,
   },
   timelineLineActive: {
-    backgroundColor: "#6D28D9",
+    backgroundColor: COLORS.primary,
   },
   timelineLabel: {
-    color: "#7E7898",
-    fontFamily: "Outfit_500Medium",
+    color: COLORS.muted,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "500",
     fontSize: 14,
     lineHeight: 18,
     paddingBottom: 16,
   },
   timelineLabelActive: {
-    color: "#251B40",
+    color: COLORS.ink,
   },
   inlineHint: {
-    color: "#716B88",
-    fontFamily: "Outfit_400Regular",
+    color: COLORS.muted,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "400",
     fontSize: 14,
     lineHeight: 20,
   },
   signalPanel: {
-    backgroundColor: "#FFF8EB",
+    backgroundColor: COLORS.blueSoft,
     borderWidth: 1,
-    borderColor: "#F0D6A1",
-    borderRadius: 28,
+    borderColor: COLORS.lineStrong,
+    borderRadius: 8,
     padding: 18,
     gap: 12,
   },
   signalTitle: {
-    color: "#6D4300",
-    fontFamily: "Outfit_700Bold",
+    color: COLORS.primaryDark,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "700",
     fontSize: 22,
     lineHeight: 26,
   },
   signalBody: {
-    color: "#9A7A45",
-    fontFamily: "Outfit_400Regular",
+    color: COLORS.muted,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "400",
     fontSize: 14,
     lineHeight: 20,
   },
@@ -3451,80 +3639,86 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF1F1",
     borderWidth: 1,
     borderColor: "#F1C4C4",
-    borderRadius: 28,
+    borderRadius: 8,
     padding: 18,
     gap: 12,
   },
   sosTitle: {
     color: "#A93232",
-    fontFamily: "Outfit_700Bold",
+    fontFamily: FONT_FAMILY,
+    fontWeight: "700",
     fontSize: 22,
     lineHeight: 26,
   },
   waitingPanel: {
-    backgroundColor: "#F5F0FF",
+    backgroundColor: COLORS.surfaceSoft,
     borderWidth: 1,
-    borderColor: "#DECFFF",
-    borderRadius: 28,
+    borderColor: COLORS.line,
+    borderRadius: 8,
     padding: 18,
     gap: 10,
   },
   waitingTitle: {
-    color: "#44268F",
-    fontFamily: "Outfit_700Bold",
+    color: COLORS.ink,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "700",
     fontSize: 20,
     lineHeight: 24,
   },
   waitingBody: {
-    color: "#6D648B",
-    fontFamily: "Outfit_400Regular",
+    color: COLORS.muted,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "400",
     fontSize: 14,
     lineHeight: 21,
   },
   workItemCard: {
-    backgroundColor: "#FBF9FF",
+    backgroundColor: COLORS.surfaceSoft,
     borderWidth: 1,
-    borderColor: "#E6DBFF",
-    borderRadius: 20,
+    borderColor: COLORS.line,
+    borderRadius: 8,
     padding: 14,
     gap: 10,
   },
   workItemTitle: {
-    color: "#261B41",
-    fontFamily: "Outfit_700Bold",
+    color: COLORS.ink,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "700",
     fontSize: 16,
   },
   workItemValue: {
-    color: "#6D28D9",
-    fontFamily: "Outfit_800ExtraBold",
+    color: COLORS.primary,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "700",
     fontSize: 16,
   },
   choicePill: {
-    backgroundColor: "#FBF9FF",
+    backgroundColor: COLORS.surfaceSoft,
     borderWidth: 1,
-    borderColor: "#E3D9FB",
+    borderColor: COLORS.line,
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   choicePillActive: {
-    backgroundColor: "#6D28D9",
-    borderColor: "#6D28D9",
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
   },
   choicePillDanger: {
-    backgroundColor: "#D04A4A",
-    borderColor: "#D04A4A",
+    backgroundColor: COLORS.danger,
+    borderColor: COLORS.danger,
   },
   choicePillText: {
-    color: "#4D3B78",
-    fontFamily: "Outfit_600SemiBold",
+    color: COLORS.ink,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "600",
     fontSize: 14,
   },
   choicePillTextActive: {
-    color: "#FFFFFF",
+    color: COLORS.actionText,
   },
   choicePillDangerText: {
-    color: "#FFF6F6",
+    color: COLORS.actionText,
   },
   infoRow: {
     flexDirection: "row",
@@ -3532,27 +3726,30 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   infoLabel: {
-    color: "#847E9C",
-    fontFamily: "IBMPlexMono_400Regular",
+    color: COLORS.muted,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "400",
     fontSize: 11,
     flex: 1,
   },
   infoValue: {
-    color: "#251B41",
-    fontFamily: "Outfit_500Medium",
+    color: COLORS.ink,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "500",
     fontSize: 14,
     flex: 1,
     textAlign: "right",
   },
   infoValueStrong: {
-    color: "#6D28D9",
-    fontFamily: "Outfit_700Bold",
+    color: COLORS.primary,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "700",
   },
   queueCard: {
-    backgroundColor: "#FCFAFF",
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: "#E6DBFF",
-    borderRadius: 22,
+    borderColor: COLORS.line,
+    borderRadius: 8,
     padding: 14,
     gap: 12,
   },
@@ -3564,30 +3761,28 @@ const styles = StyleSheet.create({
   queueBadge: {
     width: 42,
     height: 42,
-    borderRadius: 14,
-    backgroundColor: "#6D28D9",
+    borderRadius: 8,
+    backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",
   },
-  queueBadgeText: {
-    color: "#FFFFFF",
-    fontFamily: "IBMPlexMono_500Medium",
-    fontSize: 12,
-  },
   queueTitle: {
-    color: "#241A3E",
-    fontFamily: "Outfit_700Bold",
+    color: COLORS.ink,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "700",
     fontSize: 16,
   },
   queueMeta: {
-    color: "#736C8B",
-    fontFamily: "Outfit_400Regular",
+    color: COLORS.muted,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "400",
     fontSize: 13,
     marginTop: 4,
   },
   queueHint: {
-    color: "#706987",
-    fontFamily: "Outfit_400Regular",
+    color: COLORS.muted,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "400",
     fontSize: 14,
     lineHeight: 20,
   },
@@ -3598,10 +3793,10 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   historyCard: {
-    backgroundColor: "#FCFAFF",
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: "#E6DBFF",
-    borderRadius: 22,
+    borderColor: COLORS.line,
+    borderRadius: 8,
     padding: 14,
     gap: 10,
   },
@@ -3611,22 +3806,37 @@ const styles = StyleSheet.create({
     gap: 12,
     alignItems: "flex-start",
   },
+  historyTitleWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+  },
+  historyIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   historyTitle: {
-    color: "#261C40",
-    fontFamily: "Outfit_700Bold",
+    color: COLORS.ink,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "700",
     fontSize: 16,
   },
   historyMeta: {
-    color: "#807A99",
-    fontFamily: "IBMPlexMono_400Regular",
+    color: COLORS.muted,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "400",
     fontSize: 11,
     marginTop: 4,
   },
   workDraftCard: {
-    backgroundColor: "#FBF9FF",
+    backgroundColor: COLORS.surfaceSoft,
     borderWidth: 1,
-    borderColor: "#E6DBFF",
-    borderRadius: 18,
+    borderColor: COLORS.line,
+    borderRadius: 8,
     padding: 14,
     gap: 10,
   },
@@ -3641,13 +3851,13 @@ const styles = StyleSheet.create({
   },
   button: {
     minHeight: 52,
-    borderRadius: 18,
-    backgroundColor: "#6D28D9",
+    borderRadius: 999,
+    backgroundColor: COLORS.action,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 16,
-    shadowColor: "#6D28D9",
-    shadowOpacity: 0.14,
+    shadowColor: COLORS.ink,
+    shadowOpacity: 0.12,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
     elevation: 3,
@@ -3655,17 +3865,17 @@ const styles = StyleSheet.create({
   buttonCompact: {
     minHeight: 40,
     paddingHorizontal: 14,
-    borderRadius: 14,
+    borderRadius: 8,
     shadowOpacity: 0,
     elevation: 0,
   },
   buttonSecondary: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: "#DDD3FF",
+    borderColor: COLORS.lineStrong,
   },
   buttonDanger: {
-    backgroundColor: "#E34E4E",
+    backgroundColor: COLORS.danger,
   },
   buttonInner: {
     width: "100%",
@@ -3684,26 +3894,15 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(255, 255, 255, 0.18)",
     alignItems: "center",
     justifyContent: "center",
   },
   buttonOrbSecondary: {
-    backgroundColor: "#F2EBFF",
+    backgroundColor: COLORS.surfaceSoft,
   },
   buttonOrbDanger: {
     backgroundColor: "rgba(255,255,255,0.22)",
-  },
-  buttonOrbText: {
-    color: "#FFFFFF",
-    fontFamily: "IBMPlexMono_500Medium",
-    fontSize: 13,
-  },
-  buttonOrbTextSecondary: {
-    color: "#6D28D9",
-  },
-  buttonOrbTextDanger: {
-    color: "#FFFFFF",
   },
   buttonPressed: {
     opacity: 0.82,
@@ -3713,23 +3912,30 @@ const styles = StyleSheet.create({
     opacity: 0.56,
   },
   buttonText: {
-    color: "#FFFFFF",
-    fontFamily: "Outfit_700Bold",
+    color: COLORS.actionText,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "700",
     fontSize: 15,
   },
   buttonTextCompact: {
     fontSize: 13,
   },
   buttonTextSecondary: {
-    color: "#5B3DB4",
+    color: COLORS.ink,
   },
   buttonTextDanger: {
-    color: "#FFFFFF",
+    color: COLORS.actionText,
   },
   feedback: {
-    borderRadius: 18,
+    borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 13,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: COLORS.blueSoft,
+    borderWidth: 1,
+    borderColor: COLORS.lineStrong,
   },
   feedbackError: {
     backgroundColor: "#FFF1F1",
@@ -3737,45 +3943,48 @@ const styles = StyleSheet.create({
     borderColor: "#F2C3C3",
   },
   feedbackSuccess: {
-    backgroundColor: "#EEF8F0",
+    backgroundColor: COLORS.blueSoft,
     borderWidth: 1,
-    borderColor: "#BEE4C7",
+    borderColor: COLORS.lineStrong,
   },
   feedbackText: {
-    fontFamily: "Outfit_500Medium",
+    fontFamily: FONT_FAMILY,
+    fontWeight: "500",
     fontSize: 14,
   },
   feedbackErrorText: {
     color: "#B33838",
   },
   feedbackSuccessText: {
-    color: "#237748",
+    color: COLORS.primaryDark,
   },
   previewImage: {
     width: "100%",
     height: 176,
-    borderRadius: 22,
+    borderRadius: 8,
     resizeMode: "cover",
   },
   searchCard: {
-    backgroundColor: "#FBF9FF",
+    backgroundColor: COLORS.surfaceSoft,
     borderWidth: 1,
-    borderColor: "#E5DAFF",
-    borderRadius: 18,
+    borderColor: COLORS.line,
+    borderRadius: 8,
     padding: 14,
   },
   searchCardPressed: {
     opacity: 0.85,
   },
   searchCardText: {
-    color: "#281D45",
-    fontFamily: "Outfit_500Medium",
+    color: COLORS.ink,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "500",
     fontSize: 14,
     lineHeight: 20,
   },
   alertText: {
-    color: "#B73838",
-    fontFamily: "Outfit_500Medium",
+    color: COLORS.danger,
+    fontFamily: FONT_FAMILY,
+    fontWeight: "500",
     fontSize: 14,
     lineHeight: 20,
   },
