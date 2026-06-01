@@ -85,7 +85,7 @@ export async function searchAddress(text, nearLocation = null) {
   const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
     headers: {
       Accept: "application/json",
-      "User-Agent": "RoadRescue/1.0",
+      "User-Agent": "RapidAssist/1.0",
     },
   });
   const data = await readJsonResponse(response);
