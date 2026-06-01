@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "RoadRescue",
-    "slug": "roadrescue",
+    "name": "Rapid Assist",
+    "slug": "rapid-assist",
     "version": "1.0.0",
     "entryPoint": "./index.js",
     "orientation": "portrait",
@@ -15,7 +15,7 @@
     ],
     "ios": {
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "RoadRescue uses your location to create roadside requests and help providers reach you."
+        "NSLocationWhenInUseUsageDescription": "Rapid Assist uses your location to create roadside requests and help providers reach you."
       }
     },
     "android": {
